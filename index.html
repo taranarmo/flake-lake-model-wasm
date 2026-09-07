@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FLake Lake Model in WebAssembly (via LFortran)</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Top Navigation / App Header -->
+  <header>
+    <div class="header-inner">
+      <div class="brand">
+        <div class="brand-icon">🌊</div>
+        <div class="brand-title">
+          <h1>
+            FLake Lake Model
+            <span class="badge-wasm">WASM • 27.8 KB</span>
+          </h1>
+          <p>Freshwater Lake Thermodynamics running 100% client-side via LFortran WebAssembly</p>
+        </div>
+      </div>
+
+      <!-- Simulation Execution Controls -->
+      <div class="sim-controls">
+        <button id="btn-play" class="btn btn-primary" title="Toggle simulation play/pause">⏸ Pause</button>
+        <button id="btn-step" class="btn" title="Advance simulation by 1 hour">⏭ +1 hr</button>
+        <button id="btn-day" class="btn" title="Advance simulation by 24 hours">⏩ +1 day</button>
+        <button id="btn-reset" class="btn" title="Reset lake state to scenario defaults">🔄 Reset</button>
+        
+        <select id="speed-select" class="speed-select" title="Simulation Speed">
+          <option value="1">1x (1h/s)</option>
+          <option value="5">5x (5h/s)</option>
+          <option value="10" selected>10x (10h/s)</option>
+          <option value="30">30x (30h/s)</option>
+          <option value="60">60x (Fast)</option>
+        </select>
+      </div>
+
+      <!-- Simulation Clock -->
+      <div class="sim-clock">
+        <div id="clock-dot" class="clock-dot"></div>
+        <span id="clock-text">Initializing WASM...</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Scenario Presets Bar -->
+  <div class="presets-container">
+    <div class="presets-inner">
+      <span class="presets-label">Scenarios:</span>
+      <button id="preset-summer" class="preset-chip active" title="Warm air, strong sun, stable thermal stratification">
+        ☀️ Summer Stratification
+      </button>
+      <button id="preset-autumn" class="preset-chip" title="Cool air, high wind, deepening mixed layer, turnover">
+        🍂 Autumn Turnover
+      </button>
+      <button id="preset-winter" class="preset-chip" title="Sub-zero air, ice growth, inverse thermal stratification">
+        ❄️ Winter Freezing & Ice
+      </button>
+      <button id="preset-spring" class="preset-chip" title="Ice melt, homothermy around 4°C, onset of warming">
+        🌸 Spring Thaw
+      </button>
+      <button id="preset-annual" class="preset-chip" title="Continuous 365-day seasonal cycle">
+        🔄 365-Day Annual Cycle
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Dashboard Container -->
+  <main>
+    <div class="dashboard-grid">
+
+      <!-- Left Column: Visualizers & Telemetry -->
+      <section class="visualizer-card">
+        <div class="card-header">
+          <div class="card-title">
+            <span>Water Column Profile & Temperature Structure</span>
+          </div>
+          <div style="font-size: 0.75rem; color: var(--text-muted);">
+            FLake 1D Self-Similarity Solution
+          </div>
+        </div>
+
+        <div class="card-body">
+          <!-- Canvas Split View -->
+          <div class="canvas-split">
+            <!-- Canvas 1: Physical Lake Column -->
+            <div class="canvas-wrapper">
+              <canvas id="lake-canvas"></canvas>
+              <div class="canvas-legend">Lake Cross-Section</div>
+            </div>
+
+            <!-- Canvas 2: Temperature Profile T(z) -->
+            <div class="canvas-wrapper">
+              <canvas id="profile-canvas"></canvas>
+              <div class="canvas-legend">T(z) Profile</div>
+              <div id="profile-tooltip" class="tooltip-box"></div>
+            </div>
+          </div>
+
+          <!-- Live Telemetry Bar -->
+          <div class="telemetry-bar">
+            <div class="tele-stat">
+              <div class="tele-label">Surface Temp</div>
+              <div class="tele-value"><span id="tele-tsfc">--</span><span class="tele-unit"> °C</span></div>
+            </div>
+            <div class="tele-stat">
+              <div class="tele-label">Mixed Layer Temp</div>
+              <div class="tele-value"><span id="tele-twml">--</span><span class="tele-unit"> °C</span></div>
+            </div>
+            <div class="tele-stat">
+              <div class="tele-label">Bottom Temp</div>
+              <div class="tele-value"><span id="tele-tbot">--</span><span class="tele-unit"> °C</span></div>
+            </div>
+            <div class="tele-stat">
+              <div class="tele-label">Mean Lake Temp</div>
+              <div class="tele-value"><span id="tele-tmnw">--</span><span class="tele-unit"> °C</span></div>
+            </div>
+            <div class="tele-stat">
+              <div class="tele-label">Mixed Layer Depth</div>
+              <div class="tele-value"><span id="tele-hml">--</span><span class="tele-unit"> m</span></div>
+            </div>
+            <div class="tele-stat">
+              <div class="tele-label">Ice Thickness</div>
+              <div class="tele-value"><span id="tele-hice">--</span><span class="tele-unit"> cm</span></div>
+            </div>
+            <div class="tele-stat">
+              <div class="tele-label">Thermocline C_T</div>
+              <div class="tele-value"><span id="tele-ct">--</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Column: Controls & Configuration -->
+      <aside class="sidebar">
+
+        <!-- Current Regime Card -->
+        <div class="regime-banner">
+          <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+              <span id="regime-badge" class="regime-badge badge-stratified">Direct Stratification</span>
+            </div>
+            <div id="regime-desc" class="regime-desc">
+              Warm epilimnion floating on colder, denser deep water.
+            </div>
+          </div>
+        </div>
+
+        <!-- Meteorological Forcing Panel -->
+        <div class="panel-card">
+          <div class="panel-title">
+            <span>Atmospheric Forcing</span>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">Boundary Fluxes</span>
+          </div>
+
+          <!-- Air Temperature -->
+          <div class="control-group">
+            <div class="control-label-row">
+              <span class="control-label">Air Temperature (T_a)</span>
+              <span id="val-airtemp" class="control-val-display">24.0 °C</span>
+            </div>
+            <input type="range" id="slider-airtemp" class="slider-input" min="-25" max="38" step="0.5" value="24.0">
+          </div>
+
+          <!-- Solar Radiation -->
+          <div class="control-group">
+            <div class="control-label-row">
+              <span class="control-label">Solar Shortwave (I_atm)</span>
+              <span id="val-solar" class="control-val-display">650 W/m²</span>
+            </div>
+            <input type="range" id="slider-solar" class="slider-input" min="0" max="950" step="10" value="650">
+          </div>
+
+          <!-- Wind Speed -->
+          <div class="control-group">
+            <div class="control-label-row">
+              <span class="control-label">Wind Speed (10m)</span>
+              <span id="val-wind" class="control-val-display">2.5 m/s</span>
+            </div>
+            <input type="range" id="slider-wind" class="slider-input" min="0.5" max="22" step="0.5" value="2.5">
+          </div>
+
+          <!-- Snowfall Rate -->
+          <div class="control-group">
+            <div class="control-label-row">
+              <span class="control-label">Snow Precipitation</span>
+              <span id="val-snow" class="control-val-display">0.0 mm/h</span>
+            </div>
+            <input type="range" id="slider-snow" class="slider-input" min="0" max="5" step="0.1" value="0">
+          </div>
+
+          <!-- Diurnal Variation Toggle -->
+          <div class="control-group" style="padding-top: 0.5rem; border-top: 1px solid var(--border-color);">
+            <label class="switch-label">
+              <span>Diurnal Day / Night Cycle</span>
+              <input type="checkbox" id="chk-diurnal" class="switch-input" checked>
+            </label>
+          </div>
+        </div>
+
+        <!-- Lake Geometry & Basin Properties -->
+        <div class="panel-card">
+          <div class="panel-title">
+            <span>Lake Parameters</span>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">Morphometry</span>
+          </div>
+
+          <!-- Lake Depth -->
+          <div class="control-group">
+            <div class="control-label-row">
+              <span class="control-label">Lake Depth (D)</span>
+              <span id="val-depth" class="control-val-display">12.0 m</span>
+            </div>
+            <input type="range" id="slider-depth" class="slider-input" min="3" max="35" step="1" value="12">
+          </div>
+
+          <!-- Water Clarity / Optical Extinction -->
+          <div class="control-group">
+            <div class="control-label-row">
+              <span class="control-label">Water Clarity (Light Extinction κ)</span>
+            </div>
+            <select id="select-clarity" class="speed-select" style="width: 100%;">
+              <option value="0.5">High Clarity (Clear Lake, κ = 0.5 m⁻¹)</option>
+              <option value="1.0" selected>Moderate Clarity (Mesotrophic, κ = 1.0 m⁻¹)</option>
+              <option value="3.0">Turbid / Eutrophic (High Absorption, κ = 3.0 m⁻¹)</option>
+            </select>
+          </div>
+        </div>
+
+      </aside>
+    </div>
+
+    <!-- Time Series History Section -->
+    <section class="history-section">
+      <div class="card-header">
+        <div class="card-title">
+          <span>Simulation History (Time Series)</span>
+        </div>
+        <div class="chart-legend">
+          <div class="legend-item">
+            <span class="legend-color" style="background: #f43f5e;"></span>
+            <span>Surface Temp (T_sfc)</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-color" style="background: #fbbf24;"></span>
+            <span>Mixed Layer (T_wML)</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-color" style="background: #38bdf8;"></span>
+            <span>Bottom Temp (T_bot)</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-color" style="background: #9ca3af; border: 1px dashed #9ca3af;"></span>
+            <span>Air Temp</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-color" style="background: #c084fc;"></span>
+            <span>Mixed Depth h_ML (Right Axis)</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-color" style="background: #67e8f9;"></span>
+            <span>Ice Cover (Shaded)</span>
+          </div>
+        </div>
+      </div>
+      <div class="history-canvas-wrapper">
+        <canvas id="history-canvas"></canvas>
+        <div id="history-tooltip" class="tooltip-box"></div>
+      </div>
+    </section>
+
+    <!-- Scientific & Technical Details -->
+    <section class="info-section">
+      <h3>About FLake & WebAssembly Compilation</h3>
+      <p>
+        <strong>FLake</strong> (Freshwater Lake model) is a thermodynamic two-layer lake model originally developed by
+        Dmitrii Mironov and collaborators at the German Weather Service (Deutscher Wetterdienst, DWD) and the Leibniz Institute of
+        Freshwater Ecology and Inland Fisheries (IGB Berlin). It is widely incorporated into numerical weather prediction (NWP)
+        and climate modeling systems (e.g. COSMO, ICON, ECMWF IFS).
+      </p>
+
+      <div class="info-grid">
+        <div class="info-box">
+          <h4>📐 Concept of Self-Similarity</h4>
+          <p>
+            Rather than solving many vertical grid levels, FLake models the lake as an upper uniform mixed layer
+            (epilimnion) and a stratified thermocline (metalimnion) whose shape is parameterized by a self-similar polynomial profile
+            preserving heat and mass conservation.
+          </p>
+        </div>
+
+        <div class="info-box">
+          <h4>⚡ Compiled with LFortran</h4>
+          <p>
+            This application runs the authentic Fortran 90 physics code of FLake compiled directly into WebAssembly
+            using the <strong>LFortran 0.65.0</strong> modern Fortran compiler and LLVM. The resulting binary is only
+            <strong>27.8 KB</strong> in size.
+          </p>
+        </div>
+
+        <div class="info-box">
+          <h4>🔒 Zero Backend & Offline</h4>
+          <p>
+            Every single ODE integration timestep executes locally in your browser's WebAssembly runtime with zero network roundtrips,
+            zero server compute, and instant physical feedback.
+          </p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer>
+    <p>
+      FLake Lake Model in WebAssembly • Compiled with <a href="https://lfortran.org/" target="_blank" rel="noopener">LFortran 0.65.0</a>
+      • Source model: <a href="http://www.flake.igb-berlin.de/old/sourcecodes.shtml" target="_blank" rel="noopener">FLake (IGB Berlin / DWD)</a>
+      • Integrated in Nixpkgs
+    </p>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="wasm-base64.js"></script>
+  <script src="flake-engine.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
