@@ -1,0 +1,67 @@
+name: Build FLake WASM & Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [ "master", "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Micromamba with LFortran & LLVM tools
+        uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-name: lfortran-env
+          create-args: >-
+            -c conda-forge
+            lfortran=0.65.0
+            llvm-tools
+            lld
+
+      - name: Compile Fortran to WebAssembly
+        shell: bash -l {0}
+        run: |
+          echo "Verifying tool versions..."
+          lfortran --version
+          llc --version
+          wasm-ld --version
+          ./build.sh
+
+      - name: Verify build artifacts
+        run: |
+          test -s flake.wasm
+          test -s wasm-base64.js
+          echo "WebAssembly binary size: $(wc -c < flake.wasm) bytes"
+          echo "Base64 wrapper size: $(wc -c < wasm-base64.js) bytes"
+          echo "Artifact verification passed!"
+
+      - name: Setup GitHub Pages
+        if: ${{ !env.ACT }}
+        uses: actions/configure-pages@v5
+
+      - name: Upload GitHub Pages artifact
+        if: ${{ !env.ACT }}
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+
+      - name: Deploy to GitHub Pages
+        if: ${{ !env.ACT }}
+        id: deployment
+        uses: actions/deploy-pages@v4

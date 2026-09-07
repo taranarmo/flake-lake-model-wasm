@@ -229,12 +229,12 @@ class FLakeEngine {
         Tmnw: 2.0,
         hML: this.lakeDepth * 0.9,
         CT: 0.55,
-        hice: 0.02, // 2 cm initial ice
+        hice: 0.02,
         Tice: -1.0,
         hsnow: 0.005,
         Tsnow: -1.5
       };
-      this.dayOfYear = 15; // Mid January
+      this.dayOfYear = 15;
     } else if (preset === 'autumn') {
       init = {
         Tsfc: 9.0,
@@ -248,7 +248,7 @@ class FLakeEngine {
         hsnow: 0.0,
         Tsnow: 0.0
       };
-      this.dayOfYear = 285; // Mid October
+      this.dayOfYear = 285;
     } else if (preset === 'spring') {
       init = {
         Tsfc: 4.0,
@@ -262,16 +262,14 @@ class FLakeEngine {
         hsnow: 0.0,
         Tsnow: 0.0
       };
-      this.dayOfYear = 100; // Early April
+      this.dayOfYear = 100;
     } else {
-      // summer
-      this.dayOfYear = 190; // Mid July
+      this.dayOfYear = 190;
     }
 
     this.simulatedHours = 0;
     this.hourOfDay = 12;
 
-    // Apply to WASM memory
     const K = 273.15;
     mv.setFloat64(p.T_sfc_p, init.Tsfc + K, true);
     mv.setFloat64(p.T_wML_in, init.TwML + K, true);
@@ -291,7 +289,7 @@ class FLakeEngine {
 
   /**
    * Advances the simulation by one timestep.
-   * @param {Object} forcing - { T_air, solar, wind, Q_lw, snowRate }
+   * @param {Object} forcing - { T_air, solar, wind, Q_lw, snowRate, del_time }
    */
   step(forcing) {
     if (!this.isReady) return this.state;
@@ -300,38 +298,32 @@ class FLakeEngine {
     const mv = this.memView;
     const K = 273.15;
 
-    // Ensure sensible meteorological values
     const Tair = Math.max(-50, Math.min(50, forcing.T_air));
     const solar = Math.max(0, forcing.solar);
     const wind = Math.max(0.2, forcing.wind);
     const snowRate = forcing.snowRate || 0.0;
+    const delTime = forcing.del_time || this.timeStepSec;
 
-    // Estimate downwelling longwave radiation if not provided
-    // Standard Stefan-Boltzmann clear-sky formula: sigma * eps * T_a^4
     let Q_lw = forcing.Q_lw;
     if (Q_lw == null) {
       const Tair_K = Tair + K;
-      const eps_eff = 0.76; // effective atmospheric emissivity
+      const eps_eff = 0.76;
       const sigma = 5.670374e-8;
       Q_lw = eps_eff * sigma * Math.pow(Tair_K, 4);
     }
 
-    // Specific humidity estimation from air temp
-    // Saturation vapor pressure: 611.2 * exp(17.67 * T / (T + 243.5))
     const e_sat = 611.2 * Math.exp((17.67 * Tair) / (Tair + 243.5));
-    const rh = 0.70; // 70% average relative humidity
+    const rh = 0.70;
     const q_air = (0.622 * (rh * e_sat)) / (101325.0 - 0.378 * (rh * e_sat));
 
-    // Update WASM inputs
     mv.setFloat64(p.T_a_in, Tair + K, true);
     mv.setFloat64(p.I_atm_in, solar, true);
     mv.setFloat64(p.Q_atm_lw_in, Q_lw, true);
     mv.setFloat64(p.U_a_in, wind, true);
     mv.setFloat64(p.q_a_in, q_air, true);
     mv.setFloat64(p.dMsnowdt_in, snowRate, true);
-    mv.setFloat64(p.del_time, this.timeStepSec, true);
+    mv.setFloat64(p.del_time, delTime, true);
 
-    // Call the core FLake interface
     this.instance.exports.flake_interface(
       p.dMsnowdt_in, p.I_atm_in, p.Q_atm_lw_in, p.height_u_in, p.height_tq_in,
       p.U_a_in, p.T_a_in, p.q_a_in, p.P_a_in,
@@ -344,7 +336,6 @@ class FLakeEngine {
       p.C_T_out, p.h_snow_out, p.h_ice_out, p.h_ML_out, p.H_B1_out, p.T_sfc_n
     );
 
-    // Extract outputs
     const Tsfc = mv.getFloat64(p.T_sfc_n, true) - K;
     const TwML = mv.getFloat64(p.T_wML_out, true) - K;
     const Tmnw = mv.getFloat64(p.T_mnw_out, true) - K;
@@ -356,7 +347,6 @@ class FLakeEngine {
     const hsnow = mv.getFloat64(p.h_snow_out, true);
     const Tsnow = mv.getFloat64(p.T_snow_out, true) - K;
 
-    // Safety checks against NaNs or unphysical infinities
     if (!Number.isNaN(Tsfc) && Number.isFinite(Tsfc)) {
       this.state = {
         Tsfc,
@@ -371,7 +361,6 @@ class FLakeEngine {
         Tsnow: Math.min(0, Tsnow)
       };
 
-      // Feed outputs back into input registers for next timestep
       mv.setFloat64(p.T_sfc_p, mv.getFloat64(p.T_sfc_n, true), true);
       mv.setFloat64(p.T_wML_in, mv.getFloat64(p.T_wML_out, true), true);
       mv.setFloat64(p.T_mnw_in, mv.getFloat64(p.T_mnw_out, true), true);
@@ -382,13 +371,12 @@ class FLakeEngine {
       mv.setFloat64(p.T_ice_in, mv.getFloat64(p.T_ice_out, true), true);
       mv.setFloat64(p.h_snow_in, mv.getFloat64(p.h_snow_out, true), true);
       mv.setFloat64(p.T_snow_in, mv.getFloat64(p.T_snow_out, true), true);
-      mv.setFloat64(p.H_B1_in, mv.getFloat64(p.H_B1_out, true), true);
+      mv.setFloat64(p.H_B1_in, 1.0, true);
       mv.setFloat64(p.T_B1_in, mv.getFloat64(p.T_B1_out, true), true);
     } else {
       console.error("FLake timestep returned NaN or Inf!");
     }
 
-    // Advance clock
     this.simulatedHours++;
     this.hourOfDay = (this.hourOfDay + 1) % 24;
     if (this.hourOfDay === 0) {
@@ -399,9 +387,121 @@ class FLakeEngine {
   }
 
   /**
+   * Evaluates an isolated direct ODE calculation without disturbing ongoing live simulation.
+   */
+  runDirectCalculation(initialState, forcing, lakeParams, numSteps = 1) {
+    if (!this.isReady) throw new Error("FLake WASM engine is not ready");
+
+    const tStart = performance.now();
+    const mv = this.memView;
+    const p = this.ptrs;
+    const K = 273.15;
+
+    // Backup current engine state and lake parameters
+    const backupState = { ...this.state };
+    const backupDepth = this.lakeDepth;
+    const backupFetch = this.fetch;
+    const backupExtin = this.extinWater;
+    const backupDelTime = this.timeStepSec;
+    const backupHours = this.simulatedHours;
+    const backupDay = this.dayOfYear;
+    const backupHourOfDay = this.hourOfDay;
+
+    // Apply direct calculation lake parameters
+    const depth = lakeParams.depth != null ? lakeParams.depth : this.lakeDepth;
+    const fetch = lakeParams.fetch != null ? lakeParams.fetch : this.fetch;
+    const extin = lakeParams.extinWater != null ? lakeParams.extinWater : this.extinWater;
+    this.setLakeParameters({ depth, fetch, extinWater: extin });
+
+    const delTime = forcing.del_time || 3600.0;
+    this.timeStepSec = delTime;
+    mv.setFloat64(p.del_time, delTime, true);
+
+    // Populate initial conditions
+    const init = {
+      Tsfc: initialState.Tsfc != null ? initialState.Tsfc : 16.0,
+      TwML: initialState.TwML != null ? initialState.TwML : 16.0,
+      Tbot: initialState.Tbot != null ? initialState.Tbot : 4.0,
+      Tmnw: initialState.Tmnw != null ? initialState.Tmnw : 10.0,
+      hML: initialState.hML != null ? initialState.hML : 3.5,
+      CT: initialState.CT != null ? initialState.CT : 0.65,
+      hice: initialState.hice != null ? initialState.hice : 0.0,
+      Tice: initialState.Tice != null ? initialState.Tice : 0.0,
+      hsnow: initialState.hsnow != null ? initialState.hsnow : 0.0,
+      Tsnow: initialState.Tsnow != null ? initialState.Tsnow : 0.0
+    };
+
+    mv.setFloat64(p.T_sfc_p, init.Tsfc + K, true);
+    mv.setFloat64(p.T_wML_in, init.TwML + K, true);
+    mv.setFloat64(p.T_mnw_in, init.Tmnw + K, true);
+    mv.setFloat64(p.T_bot_in, init.Tbot + K, true);
+    mv.setFloat64(p.h_ML_in, init.hML, true);
+    mv.setFloat64(p.C_T_in, init.CT, true);
+    mv.setFloat64(p.h_ice_in, init.hice, true);
+    mv.setFloat64(p.T_ice_in, init.Tice + K, true);
+    mv.setFloat64(p.h_snow_in, init.hsnow, true);
+    mv.setFloat64(p.T_snow_in, init.Tsnow + K, true);
+    mv.setFloat64(p.H_B1_in, 1.0, true);
+    mv.setFloat64(p.T_B1_in, init.Tbot + K, true);
+
+    const stepHistory = [];
+    let currentState = null;
+
+    for (let s = 0; s < numSteps; s++) {
+      currentState = this.step(forcing);
+      stepHistory.push({ ...currentState, step: s + 1 });
+    }
+
+    const elapsedMs = performance.now() - tStart;
+    const finalProfile = this.getVerticalProfile(60);
+
+    const delta = {
+      Tsfc: currentState.Tsfc - init.Tsfc,
+      TwML: currentState.TwML - init.TwML,
+      Tbot: currentState.Tbot - init.Tbot,
+      Tmnw: currentState.Tmnw - init.Tmnw,
+      hML: currentState.hML - init.hML,
+      CT: currentState.CT - init.CT,
+      hice: currentState.hice - init.hice
+    };
+
+    // Restore live simulation state
+    this.setLakeParameters({ depth: backupDepth, fetch: backupFetch, extinWater: backupExtin });
+    this.timeStepSec = backupDelTime;
+    mv.setFloat64(p.del_time, backupDelTime, true);
+    this.simulatedHours = backupHours;
+    this.dayOfYear = backupDay;
+    this.hourOfDay = backupHourOfDay;
+    this.state = backupState;
+
+    mv.setFloat64(p.T_sfc_p, backupState.Tsfc + K, true);
+    mv.setFloat64(p.T_wML_in, backupState.TwML + K, true);
+    mv.setFloat64(p.T_mnw_in, backupState.Tmnw + K, true);
+    mv.setFloat64(p.T_bot_in, backupState.Tbot + K, true);
+    mv.setFloat64(p.h_ML_in, backupState.hML, true);
+    mv.setFloat64(p.C_T_in, backupState.CT, true);
+    mv.setFloat64(p.h_ice_in, backupState.hice, true);
+    mv.setFloat64(p.T_ice_in, backupState.Tice + K, true);
+    mv.setFloat64(p.h_snow_in, backupState.hsnow, true);
+    mv.setFloat64(p.T_snow_in, backupState.Tsnow + K, true);
+    mv.setFloat64(p.H_B1_in, 1.0, true);
+    mv.setFloat64(p.T_B1_in, backupState.Tbot + K, true);
+
+    return {
+      before: init,
+      after: currentState,
+      delta,
+      lakeParams: { depth, fetch, extinWater: extin },
+      forcing,
+      numSteps,
+      stepHistory,
+      profile: finalProfile,
+      elapsedMs
+    };
+  }
+
+  /**
    * Computes the vertical temperature profile T(z) according to FLake self-similarity.
-   * @param {number} numPoints
-   * @returns {Array<{depth: number, temp: number}>}
    */
   getVerticalProfile(numPoints = 60) {
     const { TwML, Tbot, hML, CT, hice, Tsfc } = this.state;
@@ -413,12 +513,8 @@ class FLakeEngine {
       let T = TwML;
 
       if (z <= hML) {
-        // Mixed layer is isothermal
         T = TwML;
       } else if (D > hML) {
-        // Thermocline parameterization:
-        // zeta = (z - hML) / (D - hML) in [0, 1]
-        // Phi_T(zeta) = (40/3*CT - 20/3)*zeta + (18 - 30*CT)*zeta^2 + (20*CT - 12)*zeta^3 + (5/3 - 10/3*CT)*zeta^4
         const zeta = Math.min(1.0, Math.max(0.0, (z - hML) / (D - hML)));
         const c1 = (40.0 / 3.0) * CT - (20.0 / 3.0);
         const c2 = 18.0 - 30.0 * CT;
@@ -445,9 +541,6 @@ class FLakeEngine {
     };
   }
 
-  /**
-   * Categorizes the current thermodynamic state of the lake.
-   */
   getRegime() {
     const { hice, TwML, Tbot, hML } = this.state;
     const D = this.lakeDepth;

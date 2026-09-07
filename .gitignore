@@ -1,0 +1,12 @@
+# Fortran & LLVM build artifacts
+*.mod
+*.o
+*.ll
+src/*.mod
+src/*.o
+src/*.ll
+
+# Editor & OS artifacts
+.DS_Store
+*.swp
+*~

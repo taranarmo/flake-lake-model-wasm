@@ -1,5 +1,6 @@
 /**
  * FLake WebAssembly Dashboard Application
+ * Supports both continuous interactive simulation and direct ODE calculator modes.
  */
 
 (function () {
@@ -10,19 +11,20 @@
 
   // Application State
   const state = {
+    activeTab: 'simulation', // 'simulation' | 'calculator'
     isRunning: true,
-    speed: 10,           // steps per second
+    speed: 10,               // steps per second
     lastStepTime: 0,
     preset: 'summer',
-    diurnalCycle: true,  // day/night variation
-    annualCycle: false,  // 365-day seasonal cycle
+    diurnalCycle: true,      // day/night variation
+    annualCycle: false,      // 365-day seasonal cycle
 
     // Manual forcing inputs (base values)
-    baseAirTemp: 24.0,   // deg C
-    baseSolar: 650.0,    // W/m2
-    baseWind: 2.5,       // m/s
-    snowRate: 0.0,       // kg/m2/s
-    qLw: null,           // auto
+    baseAirTemp: 24.0,       // deg C
+    baseSolar: 650.0,        // W/m2
+    baseWind: 2.5,           // m/s
+    snowRate: 0.0,           // kg/m2/s
+    qLw: null,               // auto
 
     // Lake geometry
     lakeDepth: 12.0,
@@ -30,10 +32,12 @@
 
     // Time series history buffer (up to 720 hours = 30 days)
     history: [],
-    maxHistoryLength: 720
+    maxHistoryLength: 720,
+
+    // Latest direct calculation result
+    lastCalcResult: null
   };
 
-  // Month names for date formatting
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const DAYS_IN_MONTHS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
@@ -51,8 +55,16 @@
     return `Day ${dayOfYear} (${MONTHS[monthIdx]} ${day.toString().padStart(2, '0')}) ${h}:00`;
   }
 
-  // DOM Elements Cache
+  // DOM Elements
   const UI = {
+    // Mode tabs
+    tabSimulation: document.getElementById('tab-simulation'),
+    tabCalculator: document.getElementById('tab-calculator'),
+    viewSimulation: document.getElementById('view-simulation'),
+    viewCalculator: document.getElementById('view-calculator'),
+    headerSimControls: document.getElementById('header-sim-controls'),
+
+    // Simulation Controls
     btnPlay: document.getElementById('btn-play'),
     btnStep: document.getElementById('btn-step'),
     btnDay: document.getElementById('btn-day'),
@@ -100,17 +112,47 @@
     profileCanvas: document.getElementById('profile-canvas'),
     historyCanvas: document.getElementById('history-canvas'),
     profileTooltip: document.getElementById('profile-tooltip'),
-    historyTooltip: document.getElementById('history-tooltip')
+    historyTooltip: document.getElementById('history-tooltip'),
+
+    // Direct Calculator View
+    btnCalcStep: document.getElementById('btn-calc-step'),
+    btnCalcNSteps: document.getElementById('btn-calc-n-steps'),
+    calcStepsCount: document.getElementById('calc-steps-count'),
+    btnCalcCopySim: document.getElementById('btn-calc-copy-sim'),
+    btnCalcApplySim: document.getElementById('btn-calc-apply-sim'),
+    btnCalcPresetSummer: document.getElementById('btn-calc-preset-summer'),
+    btnCalcPresetWinter: document.getElementById('btn-calc-preset-winter'),
+
+    calcInitTsfc: document.getElementById('calc-init-tsfc'),
+    calcInitTwml: document.getElementById('calc-init-twml'),
+    calcInitTbot: document.getElementById('calc-init-tbot'),
+    calcInitTmnw: document.getElementById('calc-init-tmnw'),
+    calcInitHml: document.getElementById('calc-init-hml'),
+    calcInitCt: document.getElementById('calc-init-ct'),
+    calcInitHice: document.getElementById('calc-init-hice'),
+    calcInitHsnow: document.getElementById('calc-init-hsnow'),
+
+    calcForceTair: document.getElementById('calc-force-tair'),
+    calcForceSolar: document.getElementById('calc-force-solar'),
+    calcForceWind: document.getElementById('calc-force-wind'),
+    calcForceDeltime: document.getElementById('calc-force-deltime'),
+    calcLakeDepth: document.getElementById('calc-lake-depth'),
+    calcLakeExtin: document.getElementById('calc-lake-extin'),
+
+    calcStatusBadge: document.getElementById('calc-status-badge'),
+    calcTimingBanner: document.getElementById('calc-timing-banner'),
+    calcResultsTbody: document.getElementById('calc-results-tbody'),
+    calcProfileCanvas: document.getElementById('calc-profile-canvas'),
+    calcJsonOutput: document.getElementById('calc-json-output'),
+    btnCopyJson: document.getElementById('btn-copy-json')
   };
 
   // Canvas Contexts
   const ctxLake = UI.lakeCanvas.getContext('2d');
   const ctxProfile = UI.profileCanvas.getContext('2d');
   const ctxHistory = UI.historyCanvas.getContext('2d');
+  const ctxCalcProfile = UI.calcProfileCanvas.getContext('2d');
 
-  /**
-   * Helper to configure high-DPI canvas
-   */
   function setupDpiCanvas(canvas, ctx) {
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
@@ -121,46 +163,35 @@
     return { width: rect.width, height: rect.height };
   }
 
-  /**
-   * Calculates instantaneous meteorological forcing based on base inputs,
-   * diurnal cycle, and optional annual cycle.
-   */
   function getInstantaneousForcing() {
     let airTemp = state.baseAirTemp;
     let solar = state.baseSolar;
     const wind = state.baseWind;
     const snowRate = state.snowRate;
 
-    // Annual cycle modulation if active
     if (state.annualCycle) {
-      // Sinusoidal seasonal wave peaking around Day 200 (mid-July)
       const day = engine.dayOfYear;
       const annualPhase = (2 * Math.PI * (day - 110)) / 365;
-      airTemp = 10.0 + 15.0 * Math.sin(annualPhase); // -5C in winter to +25C in summer
-      const maxSolarSeason = 300.0 + 350.0 * Math.sin(annualPhase); // 0-650 W/m2 peak
+      airTemp = 10.0 + 15.0 * Math.sin(annualPhase);
+      const maxSolarSeason = 300.0 + 350.0 * Math.sin(annualPhase);
       solar = Math.max(0, maxSolarSeason);
     }
 
-    // Diurnal cycle modulation if active
     if (state.diurnalCycle) {
       const h = engine.hourOfDay;
-      // Solar diurnal cycle: peaks at 12:00, 0 at night (6:00 to 18:00)
       if (h >= 6 && h <= 18) {
         const sunElev = Math.sin((Math.PI * (h - 6)) / 12);
-        solar = solar * sunElev * 1.57; // scale so average matches base
+        solar = solar * sunElev * 1.57;
       } else {
         solar = 0.0;
       }
-
-      // Air temp diurnal cycle: minimum around 06:00, peak around 15:00
       const tempDiurnal = 4.0 * Math.sin((2 * Math.PI * (h - 9)) / 24);
       airTemp += tempDiurnal;
     }
 
-    // Auto calculate snowfall rate if freezing air and high cloud/humidity
     let effectiveSnowRate = snowRate;
     if (airTemp < 0 && state.preset === 'winter' && snowRate === 0) {
-      effectiveSnowRate = 0.00002; // light snow (~0.07 mm/hr water equivalent)
+      effectiveSnowRate = 0.00002;
     }
 
     return {
@@ -172,14 +203,10 @@
     };
   }
 
-  /**
-   * Executes a single simulation step and records history.
-   */
   function stepSimulation() {
     const forcing = getInstantaneousForcing();
     const res = engine.step(forcing);
 
-    // Save to time series buffer
     state.history.push({
       hour: engine.simulatedHours,
       dayOfYear: engine.dayOfYear,
@@ -203,9 +230,6 @@
     updateTelemetry(res, forcing);
   }
 
-  /**
-   * Updates all UI labels and telemetry badges.
-   */
   function updateTelemetry(res, forcing) {
     UI.teleTsfc.textContent = res.Tsfc.toFixed(1);
     UI.teleTwML.textContent = res.TwML.toFixed(1);
@@ -215,16 +239,13 @@
     UI.teleHice.textContent = (res.hice * 100).toFixed(1);
     UI.teleCt.textContent = res.CT.toFixed(3);
 
-    // Date & Clock
     UI.clockText.textContent = getSimulatedDateString(engine.dayOfYear, engine.hourOfDay);
 
-    // Dynamic regime badge
     const regime = engine.getRegime();
     UI.regimeBadge.textContent = regime.label;
     UI.regimeBadge.className = 'regime-badge ' + regime.badgeClass;
     UI.regimeDesc.textContent = regime.desc;
 
-    // Show live forcing values
     UI.valAirTemp.textContent = `${forcing.T_air.toFixed(1)} °C`;
     UI.valSolar.textContent = `${Math.round(forcing.solar)} W/m²`;
   }
@@ -237,7 +258,6 @@
     const { Tsfc, TwML, Tbot, hML, hice, hsnow } = engine.state;
     const D = engine.lakeDepth;
 
-    // Dimensions
     const rulerWidth = 44;
     const skyHeight = 65;
     const sedimentHeight = 25;
@@ -247,7 +267,6 @@
     const waterLeft = rulerWidth;
     const waterWidth = width - rulerWidth;
 
-    // 1. Sky & Atmosphere Background
     const isDay = engine.hourOfDay >= 6 && engine.hourOfDay <= 18;
     const skyGrad = ctxLake.createLinearGradient(0, 0, 0, skyHeight);
     if (isDay) {
@@ -261,12 +280,10 @@
     ctxLake.fillStyle = skyGrad;
     ctxLake.fillRect(waterLeft, 0, waterWidth, skyHeight);
 
-    // Sun or Moon
     const celestialX = waterLeft + (waterWidth * ((engine.hourOfDay + 6) % 24)) / 24;
     const celestialY = 28 + 12 * Math.sin(((engine.hourOfDay % 12) / 12) * Math.PI);
     ctxLake.save();
     if (isDay) {
-      // Glowing Sun
       const sunGlow = ctxLake.createRadialGradient(celestialX, celestialY, 2, celestialX, celestialY, 20);
       sunGlow.addColorStop(0, 'rgba(255, 235, 120, 1.0)');
       sunGlow.addColorStop(0.5, 'rgba(255, 180, 50, 0.4)');
@@ -281,7 +298,6 @@
       ctxLake.arc(celestialX, celestialY, 7, 0, Math.PI * 2);
       ctxLake.fill();
     } else {
-      // Moon
       ctxLake.fillStyle = '#e2e8f0';
       ctxLake.beginPath();
       ctxLake.arc(celestialX, celestialY, 6, 0, Math.PI * 2);
@@ -289,13 +305,11 @@
     }
     ctxLake.restore();
 
-    // Wind vector indicator on surface
     const windSpeed = state.baseWind;
     ctxLake.fillStyle = 'rgba(255, 255, 255, 0.6)';
     ctxLake.font = '11px ' + getComputedStyle(document.body).getPropertyValue('--font-mono');
     ctxLake.fillText(`Wind: ${windSpeed.toFixed(1)} m/s →`, waterLeft + 12, skyHeight - 12);
 
-    // 2. Lake Sediment (Bed)
     const bedGrad = ctxLake.createLinearGradient(0, waterBottom, 0, height);
     bedGrad.addColorStop(0, '#2d1f14');
     bedGrad.addColorStop(1, '#150d07');
@@ -306,7 +320,6 @@
     ctxLake.font = '10px sans-serif';
     ctxLake.fillText('Lake Bed & Sediments', waterLeft + 12, height - 8);
 
-    // 3. Water Column Rendering with Thermal Color Gradients
     const depthToY = (z) => waterTop + (z / D) * waterHeight;
     const mixedLayerY = depthToY(Math.min(D, hML));
 
@@ -331,7 +344,6 @@
     const cTwML = tempToColor(TwML);
     const cTbot = tempToColor(Tbot);
 
-    // Water Column Gradient
     const waterGrad = ctxLake.createLinearGradient(0, waterTop, 0, waterBottom);
     const mlStop = Math.max(0, Math.min(1.0, (mixedLayerY - waterTop) / waterHeight));
 
@@ -342,7 +354,6 @@
     ctxLake.fillStyle = waterGrad;
     ctxLake.fillRect(waterLeft, waterTop, waterWidth, waterHeight);
 
-    // Mixed Layer Waves or Boundary Indicator
     if (hML > 0.2 && hML < D * 0.95) {
       ctxLake.save();
       ctxLake.strokeStyle = 'rgba(255, 255, 255, 0.4)';
@@ -353,7 +364,6 @@
       ctxLake.lineTo(waterLeft + waterWidth, mixedLayerY);
       ctxLake.stroke();
 
-      // Label tag for mixed layer depth
       ctxLake.fillStyle = 'rgba(15, 23, 42, 0.85)';
       ctxLake.fillRect(waterLeft + waterWidth - 110, mixedLayerY - 18, 100, 16);
       ctxLake.strokeStyle = 'rgba(255, 255, 255, 0.2)';
@@ -364,7 +374,6 @@
       ctxLake.restore();
     }
 
-    // 4. Ice and Snow Layer
     if (hice > 0.0005) {
       const iceThicknessPx = Math.max(4, Math.min(45, hice * 250));
       const iceTop = waterTop - iceThicknessPx;
@@ -403,7 +412,6 @@
       ctxLake.stroke();
     }
 
-    // 5. Depth Ruler on Left
     ctxLake.fillStyle = '#090d16';
     ctxLake.fillRect(0, 0, rulerWidth, height);
     ctxLake.strokeStyle = 'rgba(255, 255, 255, 0.15)';
@@ -452,11 +460,9 @@
     const tempToX = (t) => padLeft + ((t - tMin) / (tMax - tMin)) * plotW;
     const depthToY = (z) => padTop + (z / D) * plotH;
 
-    // Background
     ctxProfile.fillStyle = '#060912';
     ctxProfile.fillRect(0, 0, width, height);
 
-    // Grid lines for Temperature
     ctxProfile.lineWidth = 1;
     ctxProfile.font = '10px ' + getComputedStyle(document.body).getPropertyValue('--font-mono');
     ctxProfile.textAlign = 'center';
@@ -483,7 +489,6 @@
     }
     ctxProfile.setLineDash([]);
 
-    // Grid lines for Depth
     ctxProfile.textAlign = 'right';
     const depthInterval = D <= 10 ? 2 : D <= 25 ? 5 : 10;
     for (let z = 0; z <= D; z += depthInterval) {
@@ -498,11 +503,9 @@
       ctxProfile.fillText(`${z}m`, padLeft - 8, y + 4);
     }
 
-    // Plot Frame
     ctxProfile.strokeStyle = 'rgba(255, 255, 255, 0.15)';
     ctxProfile.strokeRect(padLeft, padTop, plotW, plotH);
 
-    // Labels
     ctxProfile.fillStyle = '#9ca3af';
     ctxProfile.font = '10px sans-serif';
     ctxProfile.textAlign = 'center';
@@ -514,7 +517,6 @@
     ctxProfile.fillText('Depth (m)', 0, 0);
     ctxProfile.restore();
 
-    // Plot Thermocline Profile Curve
     ctxProfile.save();
     ctxProfile.lineWidth = 3;
     const curveGrad = ctxProfile.createLinearGradient(0, padTop, 0, padTop + plotH);
@@ -533,7 +535,6 @@
     ctxProfile.stroke();
     ctxProfile.restore();
 
-    // If ice is present, plot linear ice temperature profile
     if (iceThickness > 0.001) {
       const iceTopY = Math.max(padTop - 20, padTop - iceThickness * 100);
       const sfcX = tempToX(surfaceTemp);
@@ -555,7 +556,6 @@
       ctxProfile.restore();
     }
 
-    // Key points markers
     const sfcX = tempToX(surfaceTemp);
     const sfcY = depthToY(0);
     ctxProfile.fillStyle = '#f97316';
@@ -628,7 +628,6 @@
     const yTemp = (t) => padTop + chartH - ((t - minT) / (maxT - minT)) * chartH;
     const yDepth = (d) => padTop + (d / maxDepth) * chartH;
 
-    // Left Axis (Temperature) Grid
     ctxHistory.lineWidth = 1;
     ctxHistory.font = '10px ' + getComputedStyle(document.body).getPropertyValue('--font-mono');
     ctxHistory.textAlign = 'right';
@@ -646,14 +645,12 @@
       ctxHistory.fillText(`${t}°C`, padLeft - 6, y + 3);
     }
 
-    // Right Axis (Depth) Grid labels
     ctxHistory.textAlign = 'left';
     ctxHistory.fillStyle = '#a855f7';
     ctxHistory.fillText('0m', padLeft + chartW + 6, padTop + 4);
     ctxHistory.fillText(`${(maxDepth / 2).toFixed(0)}m`, padLeft + chartW + 6, padTop + chartH / 2);
     ctxHistory.fillText(`${maxDepth.toFixed(0)}m`, padLeft + chartW + 6, padTop + chartH);
 
-    // Time Axis (X-axis ticks)
     ctxHistory.textAlign = 'center';
     ctxHistory.fillStyle = '#6b7280';
     const timeTickInterval = Math.max(1, Math.floor(history.length / 6));
@@ -663,7 +660,6 @@
       ctxHistory.fillText(`D${h.dayOfYear} ${h.hourOfDay}h`, x, height - 10);
     }
 
-    // Draw Ice Thickness as shaded region
     ctxHistory.save();
     let hasIce = false;
     ctxHistory.beginPath();
@@ -684,7 +680,6 @@
     }
     ctxHistory.restore();
 
-    // Draw Series
     function drawSeries(getValue, strokeStyle, lineWidth = 2, dash = []) {
       ctxHistory.save();
       ctxHistory.strokeStyle = strokeStyle;
@@ -702,10 +697,8 @@
       ctxHistory.restore();
     }
 
-    // Air Temp (Gray dashed)
     drawSeries(h => h.Tair, 'rgba(156, 163, 175, 0.4)', 1.5, [4, 4]);
 
-    // Mixed Layer Depth (Purple)
     ctxHistory.save();
     ctxHistory.strokeStyle = '#c084fc';
     ctxHistory.lineWidth = 1.8;
@@ -719,34 +712,126 @@
     ctxHistory.stroke();
     ctxHistory.restore();
 
-    // Bottom Temp (Teal)
     drawSeries(h => h.Tbot, '#38bdf8', 2);
-
-    // Mixed Layer Temp (Amber)
     drawSeries(h => h.TwML, '#fbbf24', 2.2);
-
-    // Surface Temp (Coral/Red)
     drawSeries(h => h.Tsfc, '#f43f5e', 2.5);
 
-    // Chart Border
     ctxHistory.strokeStyle = 'rgba(255, 255, 255, 0.15)';
     ctxHistory.strokeRect(padLeft, padTop, chartW, chartH);
   }
 
   /**
-   * Main Render Loop
+   * Render Canvas 4: Direct Calculator Thermal Profile
    */
-  function renderAll() {
-    renderLakeColumn();
-    renderProfilePlot();
-    renderHistoryChart();
+  function renderCalcProfilePlot(profileData) {
+    if (!profileData || !profileData.waterProfile) return;
+    const { width, height } = setupDpiCanvas(UI.calcProfileCanvas, ctxCalcProfile);
+
+    const { waterProfile, surfaceTemp, mixedLayerTemp, bottomTemp, mixedLayerDepth, lakeDepth, iceThickness } = profileData;
+    const D = lakeDepth;
+    const padLeft = 40;
+    const padRight = 15;
+    const padTop = 20;
+    const padBottom = 25;
+    const plotW = width - padLeft - padRight;
+    const plotH = height - padTop - padBottom;
+
+    let tMin = -2.0;
+    let tMax = 28.0;
+    if (surfaceTemp < tMin) tMin = Math.floor(surfaceTemp - 2);
+    if (surfaceTemp > tMax) tMax = Math.ceil(surfaceTemp + 2);
+
+    const tempToX = (t) => padLeft + ((t - tMin) / (tMax - tMin)) * plotW;
+    const depthToY = (z) => padTop + (z / D) * plotH;
+
+    ctxCalcProfile.fillStyle = '#060912';
+    ctxCalcProfile.fillRect(0, 0, width, height);
+
+    ctxCalcProfile.lineWidth = 1;
+    ctxCalcProfile.font = '9px ' + getComputedStyle(document.body).getPropertyValue('--font-mono');
+    ctxCalcProfile.textAlign = 'center';
+
+    for (let t = Math.ceil(tMin / 5) * 5; t <= tMax; t += 5) {
+      const x = tempToX(t);
+      const isFourDeg = Math.abs(t - 4.0) < 0.01;
+
+      ctxCalcProfile.strokeStyle = isFourDeg ? 'rgba(56, 189, 248, 0.35)' : 'rgba(255, 255, 255, 0.06)';
+      ctxCalcProfile.setLineDash(isFourDeg ? [3, 3] : []);
+      ctxCalcProfile.beginPath();
+      ctxCalcProfile.moveTo(x, padTop);
+      ctxCalcProfile.lineTo(x, padTop + plotH);
+      ctxCalcProfile.stroke();
+
+      ctxCalcProfile.fillStyle = isFourDeg ? '#38bdf8' : '#6b7280';
+      ctxCalcProfile.fillText(`${t}°`, x, height - padBottom + 12);
+    }
+    ctxCalcProfile.setLineDash([]);
+
+    ctxCalcProfile.textAlign = 'right';
+    const depthInterval = D <= 10 ? 2 : D <= 25 ? 5 : 10;
+    for (let z = 0; z <= D; z += depthInterval) {
+      const y = depthToY(z);
+      ctxCalcProfile.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+      ctxCalcProfile.beginPath();
+      ctxCalcProfile.moveTo(padLeft, y);
+      ctxCalcProfile.lineTo(padLeft + plotW, y);
+      ctxCalcProfile.stroke();
+
+      ctxCalcProfile.fillStyle = '#6b7280';
+      ctxCalcProfile.fillText(`${z}m`, padLeft - 6, y + 3);
+    }
+
+    ctxCalcProfile.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctxCalcProfile.strokeRect(padLeft, padTop, plotW, plotH);
+
+    // Profile line
+    ctxCalcProfile.save();
+    ctxCalcProfile.lineWidth = 2.5;
+    const curveGrad = ctxCalcProfile.createLinearGradient(0, padTop, 0, padTop + plotH);
+    curveGrad.addColorStop(0, '#f97316');
+    curveGrad.addColorStop(0.5, '#06b6d4');
+    curveGrad.addColorStop(1, '#3b82f6');
+    ctxCalcProfile.strokeStyle = curveGrad;
+
+    ctxCalcProfile.beginPath();
+    waterProfile.forEach((pt, idx) => {
+      const x = tempToX(pt.temp);
+      const y = depthToY(pt.depth);
+      if (idx === 0) ctxCalcProfile.moveTo(x, y);
+      else ctxCalcProfile.lineTo(x, y);
+    });
+    ctxCalcProfile.stroke();
+    ctxCalcProfile.restore();
+
+    // Ice profile if present
+    if (iceThickness > 0.001) {
+      const iceTopY = Math.max(padTop - 15, padTop - iceThickness * 100);
+      const sfcX = tempToX(surfaceTemp);
+      const freezeX = tempToX(0.0);
+
+      ctxCalcProfile.save();
+      ctxCalcProfile.lineWidth = 2;
+      ctxCalcProfile.strokeStyle = '#a5f3fc';
+      ctxCalcProfile.beginPath();
+      ctxCalcProfile.moveTo(sfcX, iceTopY);
+      ctxCalcProfile.lineTo(freezeX, padTop);
+      ctxCalcProfile.stroke();
+      ctxCalcProfile.restore();
+    }
   }
 
-  /**
-   * Simulation Animation Cycle
-   */
+  function renderAll() {
+    if (state.activeTab === 'simulation') {
+      renderLakeColumn();
+      renderProfilePlot();
+      renderHistoryChart();
+    } else if (state.activeTab === 'calculator' && state.lastCalcResult) {
+      renderCalcProfilePlot(state.lastCalcResult.profile);
+    }
+  }
+
   function animationLoop(timestamp) {
-    if (state.isRunning && engine.isReady) {
+    if (state.activeTab === 'simulation' && state.isRunning && engine.isReady) {
       const interval = 1000 / state.speed;
       if (!state.lastStepTime || timestamp - state.lastStepTime >= interval) {
         stepSimulation();
@@ -758,9 +843,6 @@
     requestAnimationFrame(animationLoop);
   }
 
-  /**
-   * Scenario Presets Configurator
-   */
   function applyPreset(presetKey) {
     state.preset = presetKey;
     state.annualCycle = (presetKey === 'annual');
@@ -800,7 +882,6 @@
       engine.resetState('spring');
     }
 
-    // Sync sliders
     UI.sliderAirTemp.value = state.baseAirTemp;
     UI.valAirTemp.textContent = `${state.baseAirTemp.toFixed(1)} °C`;
     UI.sliderSolar.value = state.baseSolar;
@@ -815,17 +896,249 @@
   }
 
   /**
-   * Event Listeners Registration
+   * Reads the Direct Model Calculator inputs and executes the calculation.
    */
+  function executeDirectCalculation(numSteps = 1) {
+    const initialState = {
+      Tsfc: parseFloat(UI.calcInitTsfc.value),
+      TwML: parseFloat(UI.calcInitTwml.value),
+      Tbot: parseFloat(UI.calcInitTbot.value),
+      Tmnw: parseFloat(UI.calcInitTmnw.value),
+      hML: parseFloat(UI.calcInitHml.value),
+      CT: parseFloat(UI.calcInitCt.value),
+      hice: parseFloat(UI.calcInitHice.value) / 100.0, // convert cm to m
+      hsnow: parseFloat(UI.calcInitHsnow.value) / 100.0
+    };
+
+    const forcing = {
+      T_air: parseFloat(UI.calcForceTair.value),
+      solar: parseFloat(UI.calcForceSolar.value),
+      wind: parseFloat(UI.calcForceWind.value),
+      del_time: parseFloat(UI.calcForceDeltime.value)
+    };
+
+    const lakeParams = {
+      depth: parseFloat(UI.calcLakeDepth.value),
+      extinWater: parseFloat(UI.calcLakeExtin.value),
+      fetch: 1500.0
+    };
+
+    try {
+      const result = engine.runDirectCalculation(initialState, forcing, lakeParams, numSteps);
+      state.lastCalcResult = result;
+
+      // Update timing & status banner
+      UI.calcStatusBadge.textContent = "Computed";
+      UI.calcStatusBadge.className = "regime-badge badge-turnover";
+      UI.calcTimingBanner.textContent = `⚡ Evaluated ${numSteps} timestep(s) in ${result.elapsedMs.toFixed(3)} ms via WebAssembly`;
+
+      // Format delta badge
+      function deltaBadge(diff, unit = '', digits = 2) {
+        if (Math.abs(diff) < 0.001) {
+          return `<span class="delta-badge delta-zero">0.00 ${unit}</span>`;
+        }
+        const sign = diff > 0 ? '+' : '';
+        const cls = diff > 0 ? 'delta-pos' : 'delta-neg';
+        return `<span class="delta-badge ${cls}">${sign}${diff.toFixed(digits)} ${unit}</span>`;
+      }
+
+      // Populate results table
+      const b = result.before;
+      const a = result.after;
+      const d = result.delta;
+
+      UI.calcResultsTbody.innerHTML = `
+        <tr>
+          <td>Surface Temp (T_sfc)</td>
+          <td>${b.Tsfc.toFixed(2)} °C</td>
+          <td><b>${a.Tsfc.toFixed(2)} °C</b></td>
+          <td>${deltaBadge(d.Tsfc, '°C')}</td>
+        </tr>
+        <tr>
+          <td>Mixed Layer Temp (T_wML)</td>
+          <td>${b.TwML.toFixed(2)} °C</td>
+          <td><b>${a.TwML.toFixed(2)} °C</b></td>
+          <td>${deltaBadge(d.TwML, '°C')}</td>
+        </tr>
+        <tr>
+          <td>Bottom Temp (T_bot)</td>
+          <td>${b.Tbot.toFixed(2)} °C</td>
+          <td><b>${a.Tbot.toFixed(2)} °C</b></td>
+          <td>${deltaBadge(d.Tbot, '°C')}</td>
+        </tr>
+        <tr>
+          <td>Mean Lake Temp (T_mnw)</td>
+          <td>${b.Tmnw.toFixed(2)} °C</td>
+          <td><b>${a.Tmnw.toFixed(2)} °C</b></td>
+          <td>${deltaBadge(d.Tmnw, '°C')}</td>
+        </tr>
+        <tr>
+          <td>Mixed Layer Depth (h_ML)</td>
+          <td>${b.hML.toFixed(2)} m</td>
+          <td><b>${a.hML.toFixed(2)} m</b></td>
+          <td>${deltaBadge(d.hML, 'm')}</td>
+        </tr>
+        <tr>
+          <td>Ice Thickness (h_ice)</td>
+          <td>${(b.hice * 100).toFixed(2)} cm</td>
+          <td><b>${(a.hice * 100).toFixed(2)} cm</b></td>
+          <td>${deltaBadge(d.hice * 100, 'cm')}</td>
+        </tr>
+        <tr>
+          <td>Thermocline Shape (C_T)</td>
+          <td>${b.CT.toFixed(3)}</td>
+          <td><b>${a.CT.toFixed(3)}</b></td>
+          <td>${deltaBadge(d.CT, '', 3)}</td>
+        </tr>
+      `;
+
+      // Render profile plot
+      renderCalcProfilePlot(result.profile);
+
+      // Fill JSON output
+      const jsonExport = {
+        timesteps: numSteps,
+        elapsedMs: parseFloat(result.elapsedMs.toFixed(4)),
+        lakeMorphometry: result.lakeParams,
+        atmosphericForcing: result.forcing,
+        initialState: b,
+        finalState: a,
+        delta: d
+      };
+      UI.calcJsonOutput.value = JSON.stringify(jsonExport, null, 2);
+
+    } catch (err) {
+      console.error("Direct calculation error:", err);
+      UI.calcTimingBanner.textContent = `Error: ${err.message}`;
+    }
+  }
+
   function setupEventListeners() {
-    // Play / Pause
+    // Mode tabs switching
+    UI.tabSimulation.addEventListener('click', () => {
+      state.activeTab = 'simulation';
+      UI.tabSimulation.classList.add('active');
+      UI.tabCalculator.classList.remove('active');
+      UI.viewSimulation.style.display = 'block';
+      UI.viewCalculator.style.display = 'none';
+      UI.headerSimControls.style.display = 'flex';
+      renderAll();
+    });
+
+    UI.tabCalculator.addEventListener('click', () => {
+      state.activeTab = 'calculator';
+      UI.tabCalculator.classList.add('active');
+      UI.tabSimulation.classList.remove('active');
+      UI.viewSimulation.style.display = 'none';
+      UI.viewCalculator.style.display = 'block';
+      UI.headerSimControls.style.display = 'none';
+
+      // Automatically run one calculation if none has been run yet
+      if (!state.lastCalcResult) {
+        executeDirectCalculation(1);
+      } else {
+        renderCalcProfilePlot(state.lastCalcResult.profile);
+      }
+    });
+
+    // Direct Calculator button events
+    UI.btnCalcStep.addEventListener('click', () => {
+      executeDirectCalculation(1);
+    });
+
+    UI.btnCalcNSteps.addEventListener('click', () => {
+      const n = Math.max(1, Math.min(720, parseInt(UI.calcStepsCount.value, 10) || 24));
+      executeDirectCalculation(n);
+    });
+
+    UI.btnCalcCopySim.addEventListener('click', () => {
+      const s = engine.state;
+      UI.calcInitTsfc.value = s.Tsfc.toFixed(2);
+      UI.calcInitTwml.value = s.TwML.toFixed(2);
+      UI.calcInitTbot.value = s.Tbot.toFixed(2);
+      UI.calcInitTmnw.value = s.Tmnw.toFixed(2);
+      UI.calcInitHml.value = s.hML.toFixed(2);
+      UI.calcInitCt.value = s.CT.toFixed(3);
+      UI.calcInitHice.value = (s.hice * 100).toFixed(2);
+      UI.calcInitHsnow.value = (s.hsnow * 100).toFixed(2);
+
+      UI.calcForceTair.value = state.baseAirTemp.toFixed(1);
+      UI.calcForceSolar.value = Math.round(state.baseSolar);
+      UI.calcForceWind.value = state.baseWind.toFixed(1);
+      UI.calcLakeDepth.value = engine.lakeDepth.toFixed(1);
+      UI.calcLakeExtin.value = engine.extinWater.toFixed(1);
+
+      executeDirectCalculation(1);
+    });
+
+    UI.btnCalcApplySim.addEventListener('click', () => {
+      if (state.lastCalcResult && state.lastCalcResult.after) {
+        const a = state.lastCalcResult.after;
+        const K = 273.15;
+        const mv = engine.memView;
+        const p = engine.ptrs;
+
+        engine.state = { ...a };
+        mv.setFloat64(p.T_sfc_p, a.Tsfc + K, true);
+        mv.setFloat64(p.T_wML_in, a.TwML + K, true);
+        mv.setFloat64(p.T_mnw_in, a.Tmnw + K, true);
+        mv.setFloat64(p.T_bot_in, a.Tbot + K, true);
+        mv.setFloat64(p.h_ML_in, a.hML, true);
+        mv.setFloat64(p.C_T_in, a.CT, true);
+        mv.setFloat64(p.h_ice_in, a.hice, true);
+        mv.setFloat64(p.T_ice_in, a.Tice + K, true);
+        mv.setFloat64(p.h_snow_in, a.hsnow, true);
+        mv.setFloat64(p.T_snow_in, a.Tsnow + K, true);
+
+        // Switch to simulation view to observe
+        UI.tabSimulation.click();
+      }
+    });
+
+    UI.btnCalcPresetSummer.addEventListener('click', () => {
+      UI.calcInitTsfc.value = "18.0";
+      UI.calcInitTwml.value = "18.0";
+      UI.calcInitTbot.value = "4.2";
+      UI.calcInitTmnw.value = "11.0";
+      UI.calcInitHml.value = "3.2";
+      UI.calcInitCt.value = "0.65";
+      UI.calcInitHice.value = "0.0";
+      UI.calcInitHsnow.value = "0.0";
+      UI.calcForceTair.value = "26.0";
+      UI.calcForceSolar.value = "750";
+      UI.calcForceWind.value = "2.0";
+      executeDirectCalculation(1);
+    });
+
+    UI.btnCalcPresetWinter.addEventListener('click', () => {
+      UI.calcInitTsfc.value = "-2.0";
+      UI.calcInitTwml.value = "0.0";
+      UI.calcInitTbot.value = "3.9";
+      UI.calcInitTmnw.value = "1.8";
+      UI.calcInitHml.value = "10.0";
+      UI.calcInitCt.value = "0.55";
+      UI.calcInitHice.value = "5.0";
+      UI.calcInitHsnow.value = "1.0";
+      UI.calcForceTair.value = "-12.0";
+      UI.calcForceSolar.value = "30";
+      UI.calcForceWind.value = "3.5";
+      executeDirectCalculation(1);
+    });
+
+    UI.btnCopyJson.addEventListener('click', () => {
+      navigator.clipboard.writeText(UI.calcJsonOutput.value).then(() => {
+        UI.btnCopyJson.textContent = "✅ Copied!";
+        setTimeout(() => { UI.btnCopyJson.textContent = "📋 Copy JSON"; }, 2000);
+      });
+    });
+
+    // Simulation Controls
     UI.btnPlay.addEventListener('click', () => {
       state.isRunning = !state.isRunning;
       UI.btnPlay.textContent = state.isRunning ? '⏸ Pause' : '▶ Run';
       UI.clockDot.className = 'clock-dot' + (state.isRunning ? '' : ' paused');
     });
 
-    // Step (+1h)
     UI.btnStep.addEventListener('click', () => {
       state.isRunning = false;
       UI.btnPlay.textContent = '▶ Run';
@@ -833,31 +1146,24 @@
       stepSimulation();
     });
 
-    // Fast-Forward (+24h = 1 Day)
     UI.btnDay.addEventListener('click', () => {
-      for (let i = 0; i < 24; i++) {
-        stepSimulation();
-      }
+      for (let i = 0; i < 24; i++) stepSimulation();
     });
 
-    // Reset
     UI.btnReset.addEventListener('click', () => {
       applyPreset(state.preset);
     });
 
-    // Speed selector
     UI.speedSelect.addEventListener('change', (e) => {
       state.speed = parseInt(e.target.value, 10);
     });
 
-    // Presets
     UI.presetSummer.addEventListener('click', () => applyPreset('summer'));
     UI.presetAutumn.addEventListener('click', () => applyPreset('autumn'));
     UI.presetWinter.addEventListener('click', () => applyPreset('winter'));
     UI.presetSpring.addEventListener('click', () => applyPreset('spring'));
     UI.presetAnnual.addEventListener('click', () => applyPreset('annual'));
 
-    // Forcing Sliders
     UI.sliderAirTemp.addEventListener('input', (e) => {
       state.baseAirTemp = parseFloat(e.target.value);
       UI.valAirTemp.textContent = `${state.baseAirTemp.toFixed(1)} °C`;
@@ -883,7 +1189,6 @@
       state.diurnalCycle = e.target.checked;
     });
 
-    // Lake geometry controls
     UI.sliderDepth.addEventListener('input', (e) => {
       const depth = parseFloat(e.target.value);
       state.lakeDepth = depth;
@@ -897,7 +1202,7 @@
       engine.setLakeParameters({ extinWater: extin });
     });
 
-    // Profile Canvas Tooltip Hover
+    // Tooltips
     UI.profileCanvas.addEventListener('mousemove', (e) => {
       const rect = UI.profileCanvas.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
@@ -937,7 +1242,6 @@
       UI.profileTooltip.style.display = 'none';
     });
 
-    // History Canvas Tooltip Hover
     UI.historyCanvas.addEventListener('mousemove', (e) => {
       const rect = UI.historyCanvas.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
@@ -972,15 +1276,11 @@
       UI.historyTooltip.style.display = 'none';
     });
 
-    // Handle Window Resize
     window.addEventListener('resize', () => {
       renderAll();
     });
   }
 
-  /**
-   * Application Entry Point
-   */
   async function start() {
     try {
       UI.clockText.textContent = 'Initializing WASM Engine...';
@@ -990,7 +1290,6 @@
       setupEventListeners();
       applyPreset('summer');
 
-      // Kick off render and simulation loop
       requestAnimationFrame(animationLoop);
     } catch (err) {
       console.error("Failed to start FLake simulation:", err);
@@ -999,7 +1298,6 @@
     }
   }
 
-  // Launch when DOM is ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', start);
   } else {
