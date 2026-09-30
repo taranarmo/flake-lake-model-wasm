@@ -6,6 +6,15 @@ src/*.mod
 src/*.o
 src/*.ll
 
+# Python & uv virtual environment
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Static site build output
+_site/
+
 # Editor & OS artifacts
 .DS_Store
 *.swp

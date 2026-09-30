@@ -1,0 +1,10 @@
+[project]
+name = "flake-lake-model-wasm"
+version = "0.1.0"
+description = "FLake Freshwater Lake Thermodynamic Model web portal and WebAssembly simulation"
+requires-python = ">=3.10"
+dependencies = [
+    "jinja2>=3.0.0",
+    "mistune>=3.0.0",
+    "pyyaml>=6.0",
+]

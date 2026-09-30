@@ -34,21 +34,29 @@ jobs:
             llvm-tools
             lld
 
-      - name: Compile Fortran to WebAssembly
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Compile Fortran to WebAssembly & Build Website
         shell: bash -l {0}
         run: |
           echo "Verifying tool versions..."
           lfortran --version
           llc --version
           wasm-ld --version
+          uv --version
           ./build.sh
+          uv run build_site.py
 
       - name: Verify build artifacts
         run: |
-          test -s flake.wasm
-          test -s wasm-base64.js
-          echo "WebAssembly binary size: $(wc -c < flake.wasm) bytes"
-          echo "Base64 wrapper size: $(wc -c < wasm-base64.js) bytes"
+          test -s _site/index.html
+          test -s _site/model/index.html
+          test -s _site/model/flake.wasm
+          test -s _site/model/wasm-base64.js
+          echo "WebAssembly binary size: $(wc -c < _site/model/flake.wasm) bytes"
           echo "Artifact verification passed!"
 
       - name: Setup GitHub Pages
@@ -59,7 +67,7 @@ jobs:
         if: ${{ !env.ACT }}
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '.'
+          path: '_site'
 
       - name: Deploy to GitHub Pages
         if: ${{ !env.ACT }}

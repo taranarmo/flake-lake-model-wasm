@@ -390,7 +390,7 @@
 
       ctxLake.fillStyle = '#083344';
       ctxLake.font = 'bold 11px sans-serif';
-      ctxLake.fillText(`❄ ICE: ${(hice * 100).toFixed(1)} cm`, waterLeft + 16, iceTop + iceThicknessPx / 2 + 4);
+      ctxLake.fillText(`ICE: ${(hice * 100).toFixed(1)} cm`, waterLeft + 16, iceTop + iceThicknessPx / 2 + 4);
 
       if (hsnow > 0.0005) {
         const snowPx = Math.max(3, Math.min(25, hsnow * 200));
@@ -930,7 +930,7 @@
       // Update timing & status banner
       UI.calcStatusBadge.textContent = "Computed";
       UI.calcStatusBadge.className = "regime-badge badge-turnover";
-      UI.calcTimingBanner.textContent = `⚡ Evaluated ${numSteps} timestep(s) in ${result.elapsedMs.toFixed(3)} ms via WebAssembly`;
+      UI.calcTimingBanner.textContent = `Evaluated ${numSteps} timestep(s) in ${result.elapsedMs.toFixed(3)} ms via WebAssembly`;
 
       // Format delta badge
       function deltaBadge(diff, unit = '', digits = 2) {
@@ -1127,21 +1127,21 @@
 
     UI.btnCopyJson.addEventListener('click', () => {
       navigator.clipboard.writeText(UI.calcJsonOutput.value).then(() => {
-        UI.btnCopyJson.textContent = "✅ Copied!";
-        setTimeout(() => { UI.btnCopyJson.textContent = "📋 Copy JSON"; }, 2000);
+        UI.btnCopyJson.textContent = "Copied!";
+        setTimeout(() => { UI.btnCopyJson.textContent = "Copy JSON"; }, 2000);
       });
     });
 
     // Simulation Controls
     UI.btnPlay.addEventListener('click', () => {
       state.isRunning = !state.isRunning;
-      UI.btnPlay.textContent = state.isRunning ? '⏸ Pause' : '▶ Run';
+      UI.btnPlay.textContent = state.isRunning ? 'Pause' : 'Run';
       UI.clockDot.className = 'clock-dot' + (state.isRunning ? '' : ' paused');
     });
 
     UI.btnStep.addEventListener('click', () => {
       state.isRunning = false;
-      UI.btnPlay.textContent = '▶ Run';
+      UI.btnPlay.textContent = 'Run';
       UI.clockDot.className = 'clock-dot paused';
       stepSimulation();
     });

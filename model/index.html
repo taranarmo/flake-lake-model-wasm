@@ -8,11 +8,31 @@
 </head>
 <body>
 
+  <!-- Site Navigation Bar -->
+  <div class="site-nav-strip">
+    <div class="site-nav-inner">
+      <a href="../index.html" class="nav-back-link">
+        <span class="back-arrow">←</span> Back to FLake Website
+      </a>
+      <div class="site-nav-links">
+        <a href="../apps.html">Applications</a>
+        <a href="../users.html">Users</a>
+        <a href="../docs.html">Documentation</a>
+        <a href="../hints.html">Hints</a>
+        <a href="../papers.html">Publications</a>
+        <a href="../downloads.html">Downloads</a>
+        <a href="../test-runs.html">Test Runs</a>
+        <a href="../contacts.html">Contacts</a>
+        <a href="https://github.com/taranarmo/flake-lake-model" target="_blank" rel="noopener" class="gh-link">GitHub</a>
+      </div>
+    </div>
+  </div>
+
   <!-- Top Navigation / App Header -->
   <header>
     <div class="header-inner">
       <div class="brand">
-        <div class="brand-icon">🌊</div>
+        <div class="brand-icon">FL</div>
         <div class="brand-title">
           <h1>
             FLake Lake Model
@@ -24,10 +44,10 @@
 
       <!-- Simulation Execution Controls -->
       <div class="sim-controls" id="header-sim-controls">
-        <button id="btn-play" class="btn btn-primary" title="Toggle simulation play/pause">⏸ Pause</button>
-        <button id="btn-step" class="btn" title="Advance simulation by 1 hour">⏭ +1 hr</button>
-        <button id="btn-day" class="btn" title="Advance simulation by 24 hours">⏩ +1 day</button>
-        <button id="btn-reset" class="btn" title="Reset lake state to scenario defaults">🔄 Reset</button>
+        <button id="btn-play" class="btn btn-primary" title="Toggle simulation play/pause">Pause</button>
+        <button id="btn-step" class="btn" title="Advance simulation by 1 hour">+1 hr</button>
+        <button id="btn-day" class="btn" title="Advance simulation by 24 hours">+1 day</button>
+        <button id="btn-reset" class="btn" title="Reset lake state to scenario defaults">Reset</button>
         
         <select id="speed-select" class="speed-select" title="Simulation Speed">
           <option value="1">1x (1h/s)</option>
@@ -50,10 +70,10 @@
   <div class="nav-tabs-wrapper">
     <div class="nav-tabs">
       <button id="tab-simulation" class="nav-tab active">
-        <span>🌊 Interactive Simulation & Climate Cycle</span>
+        <span>FL Interactive Simulation & Climate Cycle</span>
       </button>
       <button id="tab-calculator" class="nav-tab">
-        <span>🧮 Direct Model Calculator (Single Step ODE)</span>
+        <span>Direct Model Calculator (Single Step ODE)</span>
       </button>
     </div>
   </div>
@@ -65,19 +85,19 @@
       <div class="presets-inner">
         <span class="presets-label">Scenarios:</span>
         <button id="preset-summer" class="preset-chip active" title="Warm air, strong sun, stable thermal stratification">
-          ☀️ Summer Stratification
+          Summer Stratification
         </button>
         <button id="preset-autumn" class="preset-chip" title="Cool air, high wind, deepening mixed layer, turnover">
-          🍂 Autumn Turnover
+          Autumn Turnover
         </button>
         <button id="preset-winter" class="preset-chip" title="Sub-zero air, ice growth, inverse thermal stratification">
-          ❄️ Winter Freezing & Ice
+          Winter Freezing & Ice
         </button>
         <button id="preset-spring" class="preset-chip" title="Ice melt, homothermy around 4°C, onset of warming">
-          🌸 Spring Thaw
+          Spring Thaw
         </button>
         <button id="preset-annual" class="preset-chip" title="Continuous 365-day seasonal cycle">
-          🔄 365-Day Annual Cycle
+          365-Day Annual Cycle
         </button>
       </div>
     </div>
@@ -300,16 +320,16 @@
       </div>
       <div class="calc-actions">
         <button id="btn-calc-step" class="btn btn-primary" title="Execute a single timestep in WebAssembly">
-          ▶ Compute Timestep (1 Step)
+          Compute Timestep (1 Step)
         </button>
         <button id="btn-calc-n-steps" class="btn" title="Execute multiple consecutive timesteps">
-          ⏩ Run <input type="number" id="calc-steps-count" value="24" min="1" max="720" style="width: 48px; background: rgba(0,0,0,0.5); border: 1px solid var(--border-color); color: #fff; text-align: center; border-radius: 4px;"> Steps
+          Run <input type="number" id="calc-steps-count" value="24" min="1" max="720" style="width: 48px; background: rgba(0,0,0,0.5); border: 1px solid var(--border-color); color: #fff; text-align: center; border-radius: 4px;"> Steps
         </button>
         <button id="btn-calc-copy-sim" class="btn" title="Copy current state from live simulation">
-          📥 Copy From Live Sim
+          Copy From Live Sim
         </button>
         <button id="btn-calc-apply-sim" class="btn" title="Apply these results back into the live simulation">
-          📤 Apply to Live Sim
+          Apply to Live Sim
         </button>
       </div>
     </div>
@@ -439,7 +459,7 @@
           <div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
               <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Raw JSON Packet:</span>
-              <button id="btn-copy-json" class="btn" style="padding: 2px 8px; font-size: 0.75rem;">📋 Copy JSON</button>
+              <button id="btn-copy-json" class="btn" style="padding: 2px 8px; font-size: 0.75rem;">Copy JSON</button>
             </div>
             <textarea id="calc-json-output" class="json-textarea" readonly placeholder="Raw JSON will appear here..."></textarea>
           </div>
@@ -460,7 +480,7 @@
 
     <div class="info-grid">
       <div class="info-box">
-        <h4>📐 Concept of Self-Similarity</h4>
+        <h4>Concept of Self-Similarity</h4>
         <p>
           Rather than solving many vertical grid levels, FLake models the lake as an upper uniform mixed layer
           (epilimnion) and a stratified thermocline (metalimnion) whose shape is parameterized by a self-similar polynomial profile
@@ -469,7 +489,7 @@
       </div>
 
       <div class="info-box">
-        <h4>⚡ Compiled with LFortran</h4>
+        <h4>Compiled with LFortran</h4>
         <p>
           This application runs the authentic Fortran 90 physics code of FLake compiled directly into WebAssembly
           using the <strong>LFortran 0.65.0</strong> modern Fortran compiler and LLVM. The resulting binary is only
@@ -478,7 +498,7 @@
       </div>
 
       <div class="info-box">
-        <h4>🔒 Zero Backend & Offline</h4>
+        <h4>Zero Backend & Offline</h4>
         <p>
           Every single ODE integration timestep executes locally in your browser's WebAssembly runtime with zero network roundtrips,
           zero server compute, and instant physical feedback.

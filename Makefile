@@ -1,12 +1,21 @@
-.PHONY: all build clean serve
+.PHONY: all build site clean serve deps lock
 
-all: build
+all: build site
+
+deps:
+	uv sync
+
+lock:
+	uv lock
 
 build:
 	./build.sh
 
-clean:
-	rm -f src/*.mod src/*.o src/*.ll flake.wasm wasm-base64.js
+site:
+	uv run build_site.py
 
-serve:
-	python3 -m http.server 8000
+clean:
+	rm -rf _site src/*.mod src/*.o src/*.ll
+
+serve: site
+	uv run python -m http.server -d _site 8000

@@ -1,93 +1,124 @@
-# FLake Lake Model in WebAssembly (via LFortran)
+# FLake Freshwater Lake Model (Modern Web & WebAssembly)
 
-An interactive, 100% client-side WebAssembly simulation and ODE calculator for the **FLake (Freshwater Lake)** thermodynamic model, compiled directly from original Fortran 90 sources using **LFortran 0.65.0**.
+A modernized, responsive, and easy-to-maintain web presence for the **FLake (Freshwater Lake)** thermodynamic model, recreating the original IGB Berlin portal (`http://www.flake.igb-berlin.de/old/`) as a static site hosted on **GitHub Pages**, featuring the complete Fortran 90 model running 100% client-side via **WebAssembly (WASM)**.
 
-Live GitHub Pages Demo: **[https://taranarmo.github.io/flake-lake-model/](https://taranarmo.github.io/flake-lake-model/)**
+Live Website: **[https://taranarmo.github.io/flake-lake-model/](https://taranarmo.github.io/flake-lake-model/)**  
+Interactive WebAssembly Model: **[https://taranarmo.github.io/flake-lake-model/model/](https://taranarmo.github.io/flake-lake-model/model/)**
 
 ---
 
-## 🌊 Overview
+## Overview
 
-[FLake](http://www.flake.igb-berlin.de/old/sourcecodes.shtml) is a bulk two-layer lake model based on the concept of **self-similarity** of the temperature-depth curve. It was developed by Dr. Dmitrii Mironov and collaborators at the German Weather Service (Deutscher Wetterdienst, DWD) and the Leibniz Institute of Freshwater Ecology and Inland Fisheries (IGB Berlin), and is used operationally in numerical weather prediction (ICON, COSMO, ECMWF IFS).
+[FLake](https://taranarmo.github.io/flake-lake-model/) is a bulk two-layer lake model based on the concept of **self-similarity** of the temperature-depth curve. It was developed by Dr. Dmitrii Mironov and collaborators at the German Weather Service (Deutscher Wetterdienst, DWD) and the Leibniz Institute of Freshwater Ecology and Inland Fisheries (IGB Berlin), and is used operationally in numerical weather prediction (ICON, COSMO, ECMWF IFS) and climate modeling worldwide.
 
-This application allows anyone to experiment with lake thermodynamics directly in modern web browsers:
-- **Zero backend required**: 100% of the physics runs in WebAssembly on the client.
+### Key Highlights of the Modernized Site:
+- **Zero-Backend Architecture**: The original CGI-based model runner (`_model?LAT=...`) has been replaced with a 100% client-side WebAssembly simulation compiled via **LFortran 0.65.0**. No server backend, database, or CGI scripts required.
+- **Dedicated Online Model Subsection**: Located under [`model/`](model/) with interactive lake column visualizer, seasonal presets, atmospheric forcing sliders, time-series plotting, and a single-step ODE numerical calculator.
+- **Complete Information Architecture**: Recreates all original sections including Applications, Users directory (with instant search), Documentation & Routines, Useful Hints, Publications bibliography (with instant filter), Model Downloads, Verification Test Runs (tabbed interface for Heiligensee, Müggelsee, Stechlinsee), External-parameter datasets (GLDBv2), Observational datasets, Community links, and Forum.
+- **Markdown Content Source of Truth**: All page contents are authored in Markdown under [`content/*.md`](content/) with YAML frontmatter, making it effortless for scientists and researchers to edit text, add tables, or create new sections without touching raw HTML.
+- **Clean Build Separation**: Output is compiled into `_site/` (ignored by git), keeping version control free of generated HTML artifacts.
+- **Empty Contacts Page**: Contacts page is intentionally kept empty for now.
+- **Strictly No Emojis**: Clean, professional academic typography throughout all pages and documentation.
+- **Reproducible Toolchain**: Simple Python/Jinja2/Mistune static site generator (`build_site.py`) managed via `uv`.
+
+---
+
+## Website Structure
+
+| Page | Content File (Markdown) | URL Path | Description |
+| :--- | :--- | :--- | :--- |
+| **Home** | [`content/index.md`](content/index.md) | `index.html` | Overview, model physical principles, news, and quick launch. |
+| **Online Model (WASM)** | `model/index.html` | `model/` | Interactive WebAssembly simulation and ODE calculator. |
+| **Applications** | [`content/apps.md`](content/apps.md) | `apps.html` | Operational NWP (ICON, IFS, COSMO, HIRLAM), climate, limnology. |
+| **Users Directory** | [`content/users.md`](content/users.md) | `users.html` | 40+ international institutes using FLake with instant search. |
+| **Documentation** | [`content/docs.md`](content/docs.md) | `docs.html` | Technical description, COSMO Report No. 11, Fortran routine synopsis. |
+| **Useful Hints** | [`content/hints.md`](content/hints.md) | `hints.html` | Guidance on lake depth, optical extinction, sediments, tuning-free design. |
+| **Publications** | [`content/papers.md`](content/papers.md) | `papers.html` | 115+ categorized peer-reviewed papers, books, theses with search filter. |
+| **Downloads** | [`content/downloads.md`](content/downloads.md) | `downloads.html` | Fortran 90 source code archives, Windows binary, GitHub repository. |
+| **Test Runs** | [`content/test-runs.md`](content/test-runs.md) | `test-runs.html` | Heiligensee, Müggelsee, Stechlinsee runs with verification plots & data. |
+| **GLDB Data** | [`content/external-data.md`](content/external-data.md) | `external-data.html` | Global Lake Database (GLDBv2) depth and coverage datasets. |
+| **Observational Data**| [`content/observational-data.md`](content/observational-data.md) | `observational-data.html` | Lake Mendota, Lake Krasnoe, Lake Vendyurskoe empirical datasets. |
+| **Related Links** | [`content/links.md`](content/links.md) | `links.html` | EU INTAS projects, LAKE model, LakeMIP, GOTM, host institutes. |
+| **Forum** | [`content/forum.md`](content/forum.md) | `forum.html` | FLake Google Groups forum and community channels. |
+| **Contact** | [`content/contacts.md`](content/contacts.md) | `contacts.html` | Contact information (intentionally kept empty for now). |
+
+---
+
+## Maintenance & Site Generator
+
+The site uses a clean Markdown + template architecture:
+- `content/*.md`: Authoring directory for all site pages in Markdown with YAML frontmatter.
+- `templates/base.html`: Master layout (HTML shell, head, header, hero, footer).
+- `templates/page.html`: Generic content template that renders parsed Markdown.
+- `templates/nav.html`: Global navigation bar with responsive mobile menu.
+- `templates/footer.html`: Global footer.
+- `templates/sidebar_news.html`: News & updates sidebar.
+- `site_data/*.json`: Structured data for sidebar news.
+
+### Rebuilding the Static HTML Pages:
+```bash
+# Sync dependencies via uv
+uv sync       # or: make deps
+
+# Rebuild the site using uv
+uv run build_site.py   # or: make site
+```
+This updates all `.html` pages and `.shtml` compatibility redirects in `<0.2 seconds` with exact locked dependencies from `uv.lock`.
+
+---
+
+## WebAssembly Model (`model/`)
+
+The interactive model lives in `model/` and runs 100% in the client's browser:
+- **Zero backend required**: Integrates the Fortran 90 lake equations directly in WebAssembly.
 - **Ultra-compact**: The compiled `flake.wasm` core is only **27.8 KB**.
-- **Offline & file:// portable**: Includes an automated Base64 fallback so `index.html` can even be opened straight from disk via `file://`.
+- **Offline / Portable**: Includes an automated Base64 fallback in `wasm-base64.js` so it can run even without an HTTP server under `file://`.
+- **Modes**:
+  1. *Interactive Simulation*: Dynamic lake column visualizer, ice/snow growth, seasonal presets (Summer, Autumn Turnover, Winter Freezing, Spring Thaw, 365-Day Annual Cycle), and live time-series telemetry.
+  2. *Direct ODE Calculator*: Exact single-step parameter inputs, numerical delta diff table ($\Delta T$, $\Delta h$), and JSON result export.
 
 ---
 
-## 🔬 Modes of Operation
+## Local Development & Preview
 
-### 1. 🌊 Interactive Simulation & Climate Cycle
-- **Dynamic Lake Column**: Visual cross-section showing mixed layer (epilimnion), thermocline (metalimnion), deep hypolimnion, and lake bed.
-- **Ice & Snow Dynamics**: Thermodynamic ice sheet ($h_{ice}$) and snow cover ($h_{snow}$) rendered to scale when temperatures drop below freezing.
-- **Atmospheric Forcing Controls**: Real-time sliders for air temperature ($T_a$), solar shortwave ($I_{atm}$), wind speed ($U_a$), and snowfall rate.
-- **Climate Presets**:
-  - ☀️ *Summer Stratification* (Warm air, strong sun, stable thermocline)
-  - 🍂 *Autumn Turnover* (Cooling air, high wind, deep convective mixing)
-  - ❄️ *Winter Freezing* (Sub-zero air, ice growth, inverse stratification)
-  - 🌸 *Spring Thaw* (Ice melt, homothermy around $4^\circ\text{C}$, onset of heating)
-  - 🔄 *365-Day Annual Cycle* (Autonomous climate engine cycling through seasons)
-- **Time Series History**: Live chart tracking $T_{sfc}$, $T_{wML}$, $T_{bot}$, $T_{air}$, $h_{ML}$, and ice cover over days and weeks.
-
-### 2. 🧮 Direct Model Calculator (Single-Step ODE)
-- **Numerical Inputs**: Set exact numbers for initial conditions ($T_{sfc}$, $T_{wML}$, $T_{bot}$, $T_{mnw}$, $h_{ML}$, $C_T$, $h_{ice}$, $h_{snow}$) and atmospheric forcing.
-- **Execution**: Hit **Compute Timestep** to integrate a single $\Delta t$ step in $<1\,\text{ms}$, or run $N$ consecutive steps.
-- **Delta Analysis**: Instant before $\to$ after table highlighting exact numerical changes ($\Delta T$, $\Delta h$).
-- **Export & Sync**: Copy results as raw JSON packet or apply directly to the live visualizer.
-
----
-
-## 🚀 Quick Start (Local)
-
-### Option 1: Using Python HTTP Server (Recommended)
+Start a local static web server from the repository root:
 ```bash
-python3 -m http.server 8000
-```
-Open [http://localhost:8000](http://localhost:8000) in your browser.
+# Using Makefile (runs via uv)
+make serve
 
-### Option 2: Direct File Open
-Open `index.html` directly in any modern browser (Chrome, Firefox, Safari, Edge); the embedded `wasm-base64.js` fallback allows WASM instantiation without CORS restrictions under the `file://` protocol.
+# Or using uv directly
+uv run python -m http.server 8000
+```
+Open **[http://localhost:8000](http://localhost:8000)** in your browser.
 
 ---
 
-## 🛠 Building from Fortran Sources
+## Building from Fortran Sources
 
-The Fortran 90 sources are located in `src/`.
+The Fortran 90 sources are in `src/`.
 
-### Prerequisites
+### Prerequisites:
 - **LFortran 0.65.0** (`conda install -c conda-forge lfortran=0.65.0` or via Nixpkgs)
-- **LLVM** (`llc` with `wasm32` target)
-- **LLD** (`wasm-ld` WebAssembly linker)
+- **LLVM Tools** (`llc` with `wasm32` target)
+- **LLD Linker** (`wasm-ld`)
 
-### Build Command
+### Build Command:
 ```bash
-# Using Makefile
-make build
+# Build WASM and rebuild website
+make all
 
-# Or directly using the build script
+# Or directly
 ./build.sh
+python3 build_site.py
 ```
-
-The build script will:
-1. Compile all Fortran 90 modules in `src/` in topological dependency order.
-2. Generate LLVM IR for `src_flake_interface_1D.f90`.
-3. Compile LLVM IR to a WebAssembly object file via `llc -march=wasm32`.
-4. Link the final `flake.wasm` using `wasm-ld`.
-5. Regenerate `wasm-base64.js` automatically.
 
 ---
 
-## 🚀 CI/CD & GitHub Pages Deployment
+## CI/CD & GitHub Pages Deployment
 
-The repository includes a GitHub Actions workflow in [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) that:
-1. Installs LLVM tools (`llc`, `wasm-ld`) on Ubuntu.
-2. Installs `lfortran 0.65.0` via Micromamba (conda-forge).
-3. Executes `./build.sh` to compile `flake.wasm` from source.
-4. Automatically deploys the site to **GitHub Pages** on every push to `master`.
-
-### Enabling GitHub Pages on the Repository:
-1. Go to **Settings** $\to$ **Pages** on your GitHub repository.
-2. Under **Build and deployment** $\to$ **Source**, select **GitHub Actions**.
-3. Push to `master` to trigger the workflow.
+The automated GitHub Actions workflow in [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml):
+1. Installs LLVM tools (`llc`, `wasm-ld`) and `lfortran` via Micromamba.
+2. Compiles `flake.wasm` from source using `./build.sh`.
+3. Runs `python3 build_site.py` to ensure all static pages are fresh.
+4. Verifies artifact sizes.
+5. Deploys the static site directly to **GitHub Pages**.

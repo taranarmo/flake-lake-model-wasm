@@ -1,0 +1,45 @@
+<aside class="content-sidebar">
+  <!-- Run WASM Model Sidebar Card -->
+  <div class="sidebar-card" style="background: linear-gradient(135deg, #0a2540, #163d66); color: #fff;">
+    <h3 style="border-bottom-color: var(--color-accent-bright); color: #fff;">
+      <span>Try FLake in Browser</span>
+    </h3>
+    <p style="font-size: 0.88rem; color: rgba(255,255,255,0.85); margin-bottom: 1rem;">
+      Experience the model running 100% client-side via WebAssembly. No server installation or backend required.
+    </p>
+    <a href="{{ base_url }}model/" class="btn-download" style="width: 100%; justify-content: center; background: linear-gradient(135deg, #028090, #00a896);">
+      Launch Online Model
+    </a>
+  </div>
+
+  <!-- FLake News Card -->
+  <div class="sidebar-card">
+    <h3>
+      <span>FLake News & Updates</span>
+    </h3>
+    <ul class="sidebar-news-list">
+      {% for item in news %}
+      <li class="sidebar-news-item">
+        <div class="news-date">{{ item.date }}</div>
+        <div class="news-title">
+          <a href="{{ item.url }}" {% if item.url.startswith('http') %}target="_blank" rel="noopener"{% endif %}>{{ item.title }}</a>
+        </div>
+        <div class="news-snippet">{{ item.description }}</div>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <!-- Quick Documentation Card -->
+  <div class="sidebar-card">
+    <h3>
+      <span>Model Synopsis</span>
+    </h3>
+    <p style="font-size: 0.875rem; color: var(--color-text-muted); margin-bottom: 0.75rem;">
+      Download the comprehensive technical description of FLake routines and numerical formulation:
+    </p>
+    <a href="{{ base_url }}assets/papers/flake_synopsis.pdf" class="btn-secondary" style="width: 100%; justify-content: center; font-size: 0.85rem;" target="_blank" rel="noopener">
+      FLake Synopsis (PDF, 107 KB)
+    </a>
+  </div>
+</aside>

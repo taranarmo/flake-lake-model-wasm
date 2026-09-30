@@ -1,0 +1,217 @@
+[
+  {
+    "institution": "School of Geography, Planning & Environmental Policy, University College Dublin",
+    "contact": "Paul Alexander",
+    "description": "(UCD-GPEP), Dublin, Ireland FLake is used in developing a theoretical model on subaqueous weathering in lakes in periglacial environments."
+  },
+  {
+    "institution": "European Centre for Medium-Range Weather Forecasts (ECMWF), Reading, UK",
+    "contact": "Gianpaolo Balsamo",
+    "description": "FLake is used as a lake parameterization module in the ECMWF surface scheme (presently in research mode, e.g. to develop the lake SST climatology at global scale using ERA-40 reanalysis as the atmospheric forcing)."
+  },
+  {
+    "institution": "Dep. Sciences Biologiques,",
+    "contact": "David Bird",
+    "description": "Universite du Quebec a Montreal (UQAM), Montreal, Canada FLake is used to model the lake thermal structure with GCM output."
+  },
+  {
+    "institution": "Royal Netherlands Meteorological Institute",
+    "contact": "Cisco de Bruijn (E.I.F)",
+    "description": "(KNMI), De Bilt, The Netherlands FLake is used as a single-column lake model to calculate ice thicknesses for inland lakes in the Netherlands."
+  },
+  {
+    "institution": "Civil Engineering School, Campus de Elvina",
+    "contact": "Jordi Delgado",
+    "description": "(UDC), A Coruna, Spain FLake is used as a single-column model to study the thermal behavior of a pit lake in the process of its formation."
+  },
+  {
+    "institution": "Interdisciplinary Centre on Climate Change",
+    "contact": "Claude Duguay,",
+    "description": "(IC3), University of Waterloo, Canada Homa Kheyrollah Pour, Kiana Zolfaghari FLake is used as a single-column model to simulate the Great Slave Lake and Lake Erie thermal structure."
+  },
+  {
+    "institution": "Centro Geofisica, Department of Physics, University of Lisbon (CGUL), Lisbon,",
+    "contact": "Emanuel Dutra",
+    "description": "Portugal FLake is used to estimate lake temperature and evaporation from lakes of the Iberian Peninsula."
+  },
+  {
+    "institution": "Department of Civil Engineering, Auburn University (CE), Alabama, USA",
+    "contact": "Xing Fang",
+    "description": "FLake is used as an educational tool (to teach the surface water quality modelling)."
+  },
+  {
+    "institution": "Institute",
+    "contact": "Sergey Golosov",
+    "description": "of Limnology (IL), St. Petersburg, Russia FLake is used as a physical module in models of lake ecosystems."
+  },
+  {
+    "institution": "Division of Land Hydrology, Faculty of Geography, Moscow State University (MSU), Moscow,",
+    "contact": "Maria Grechushnikova",
+    "description": "Russia FLake is used to estimate evaporation and turbulent heat exchange over lakes and water reservoirs."
+  },
+  {
+    "institution": "National Oceanic and Atmospheric Administration",
+    "contact": "Robert Grumbine",
+    "description": "(NOAA), Camp Springs, USA FLake is used as a lake parameterization scheme for surface temperature analysis."
+  },
+  {
+    "institution": "Atmosperic Physics, Physics Department,",
+    "contact": "Jonathan Gula",
+    "description": "University of Toronto (UofT), Toronto, Canada FLake is used as a single-column lake model with GCM output (CCSM3 and CESM) and reanalysis over North-America (especially the Great Lakes region), and also as a lake parameterization scheme in the mesoscale atmospheric model WRF."
+  },
+  {
+    "institution": "School of Environmental Science and Engineering, Chang'an University,",
+    "contact": "Wenfeng Huang",
+    "description": "Xi'an, P.R. China FLake is used to estimate evapration and water-sediment heat exchange in shallow ponds and lakes."
+  },
+  {
+    "institution": "Department of Meteorology and Protection of the Atmosphere,",
+    "contact": "Nikolai Kalinin",
+    "description": "Faculty of Geography, Perm State University (PSU), Perm, Russia FLake is used as an educational tool."
+  },
+  {
+    "institution": "Smithsonian Environmental Research Center (SERC), Edgewater, MD,",
+    "contact": "Hae-Cheol Kim",
+    "description": "USA FLake is used as a physical module for the phytoplankton ecology studies."
+  },
+  {
+    "institution": "Institute of",
+    "contact": "Georgiy Kirillin",
+    "description": "Freshwater Ecology and Inland Fisheries (IGB), Berlin, Germany FLake is used in a stand-alone mode to assess the response of shallow lakes to climate variability, and as a physical module in models of lake ecosystems."
+  },
+  {
+    "institution": "Russian",
+    "contact": "Ekaterina Kourzeneva",
+    "description": "State Hydrometeorological University (RSHU), St. Petersburg, Russia FLake is used as an educational tool."
+  },
+  {
+    "institution": "School of Geosciences, The Univeristy of Edinburgh",
+    "contact": "Aisling Layden",
+    "description": "(UoEd), Edinburgh, UK ARC lake data are used to optimize the FLake output (forced with ECMWF data)."
+  },
+  {
+    "institution": "Meteo-France (CNRM/GMME/MC2), Toulouse,",
+    "contact": "Patrick Le Moigne",
+    "description": "France FLake is used as a lake parameterization module in the Meteo France surface scheme SURFEX."
+  },
+  {
+    "institution": "Division of geophysics, University of Helsinki (UH), Finland",
+    "contact": "Matti Lepparanta",
+    "description": "FLake is used as a physical module for the studies of ice and snow over lakes and as an educational tool."
+  },
+  {
+    "institution": "German Weather Service (DWD), Offenbach am",
+    "contact": "Dmitrii Mironov",
+    "description": "Main, Germany FLake is used as a lake parameterization scheme in the numerical weather prediction models COSMO and ICON."
+  },
+  {
+    "institution": "Civil Engineering Department, University of British Columbia (UBC), Vancouver, Canada",
+    "contact": "Yasmin Nassar",
+    "description": "FLake is used as a single-column lake model for numerical studies on physical limnology."
+  },
+  {
+    "institution": "Department of Physics, University of Helsinki (UHel), Helsinki, Finland",
+    "contact": "Annika Nordbo",
+    "description": "FLake is used for testing the sensitivity of lake thermal stratification and surface-atmosphere exchange on water clarity."
+  },
+  {
+    "institution": "Pirkanmaa Regional Environment Centre (PREC), Tampere, Finland",
+    "contact": "Viktor Podsechin",
+    "description": "FLake is used as a single-column lake model."
+  },
+  {
+    "institution": "Department fur Geographie Lehrstuhl fur Geographie und Landschaftsokologie, Ludwig-Maximilians-Universitat Munchen (LMU), Munchen, Germany",
+    "contact": "Cornelia Rippl",
+    "description": "FLake is used as a single-column lake model to simulate the temperature structure of a lake in Upper Bavaria."
+  },
+  {
+    "institution": "GKSS",
+    "contact": "Burkhardt",
+    "description": "Research Centre, Geesthacht, Germany Rockel FLake is used as a lake parameterization scheme in the regional climate model CLM."
+  },
+  {
+    "institution": "Finnish Meteorological Institute (FMI), Helsinki, Finland",
+    "contact": "Laura Rontu",
+    "description": "FLake is used to parameterize the effect of lakes in numerical weather prediction and climate models."
+  },
+  {
+    "institution": "UK Met Office (UKMO), Exeter, United Kingdom",
+    "contact": "Gabriel Rooney",
+    "description": "FLake is used as a lake parameterization scheme in the UK Met Office Unified Model and in the UK Met Office/Universities surface-exchange scheme JULES."
+  },
+  {
+    "institution": "Hydrometeorological Centre of Russia,",
+    "contact": "Inna Rozinkina,  Gdaly Rivin",
+    "description": "(HMC), Moscow, Russia FLake is used as a lake parameterization scheme in numerical weather prediction and climate models."
+  },
+  {
+    "institution": "Faculty of Geography and Geoecology,",
+    "contact": "Igor Rusin",
+    "description": "Department of Climatology and Environmental Monitoring, St. Petersburg State University (SPbSU), St. Petersburg, Russia FLake is used as an educational tool."
+  },
+  {
+    "institution": "Department of Physics / Centro de Geofisica de Evora, University of Evora",
+    "contact": "Rui Salgado",
+    "description": "(UE), Evora, Portugal FLake is used as  a lake parameterization scheme for the NWP model suite of Meteo France."
+  },
+  {
+    "institution": "Swedish",
+    "contact": "",
+    "description": "Meteorological and Hydrological Institute (SMHI), Norrkoping, Sweden Contact person(s): Patrick Samuelsson, Ekaterina Kourzeneva FLake is used as a lake parameterization scheme in the regional climate model RCA."
+  },
+  {
+    "institution": "Department of Soil, Water and Climate, University of Minnesota (UMN), St. Paul, MN 55108 USA",
+    "contact": "Thiago Veloso dos Santos",
+    "description": "FLake is used as a lake temperature module for a global model of rice growth."
+  },
+  {
+    "institution": "GKSS Research Centre, Institute for Coastal Research, Geesthacht, Germany",
+    "contact": "",
+    "description": "Contact person(s): Frederik Schenk FLake is used as a lake parameterization scheme within the regional climate model CLM (a modified scheme with a salinity-dependent temperature of maximum density is applied to Baltic Sea)."
+  },
+  {
+    "institution": "Scientific",
+    "contact": "Viktor Stepanenko",
+    "description": "Research Computing Center of Moscow State University (SRCC MSU), Laboratory for Methods of Distant Learning, Moscow, Russia FLake is used as a single-column lake model and as a lake parameterization scheme in mesoscale atmospheric models."
+  },
+  {
+    "institution": "Water Cycle Company (Waternet),",
+    "contact": "Jasper Stroom",
+    "description": "Amsterdam, the Netherlands FLake is used to evaluate evaporation from deep (up to 45 m) inland lakes."
+  },
+  {
+    "institution": "University of Quebec at Montreal (UQAM),",
+    "contact": "Laxmi Sushama,  Andrei Martynov",
+    "description": "Department of Earth and Atmospheric Sciences, Quebec, Canada FLake is used as a single-column lake model and as a lake parameterization scheme in climate models."
+  },
+  {
+    "institution": "Northern",
+    "contact": "Arkady Terzhevik",
+    "description": "Water Problems Institute (NWPI), Petrozavodsk, Russia FLake is used as a single-column lake model."
+  },
+  {
+    "institution": "Department of Biosciences, University of Oslo (UiO), Oslo, Norway",
+    "contact": "Koji Tominaga",
+    "description": "FLake is used to simulate climate change impacts on the thermal structure of lakes in Nordic countries."
+  },
+  {
+    "institution": "The University of Tokyo (UofT), Tokyo, Japan",
+    "contact": "Lei Wang",
+    "description": "FLake is used as a single-column lake model to simulate water surface temperature for Yoshino River Basin, Japan."
+  },
+  {
+    "institution": "National Oceanic and Atmospheric Administration (NOAA), 5830 University Research Court",
+    "contact": "Yihua Wu",
+    "description": "College Park, MD 20740, USA FLake is used as a single-column model to simulate lake water temperatures over North America."
+  },
+  {
+    "institution": "Desert Research Institute (DRI), Las Vegas, USA",
+    "contact": "Lili Zhao",
+    "description": "FLake is used as a single-column lake model to simulate hydrodynamic processes (evolution of the vertical temperature structure, air-water heat exchange, mixed layer dynamics, etc.) in Lake Taihu, China."
+  },
+  {
+    "institution": "5th Workshop on \u0093Parameterization of Lakes in Numerical Weather Prediction and Climate Modelling\u0094 (LAKE 2017) held on 16-19 October 2017 in Berlin, Germany",
+    "contact": "",
+    "description": "4th Workshop on \u0093Parameterization of Lakes in Numerical Weather Prediction and Climate Modelling\u0094 (LAKE 2015) was held on 07-09 May 2015, \u00c9vora, Portugal The presentations and a summary of the Workshop are available at the workshop web site:   http://www.lake15.cge.uevora.pt/ Version 2.0 of The Global Lake Database version (GLDBv.2) is available developed by Ekaterina Kourzeneva and Margarita Choulga. By now, the dataset comprises ca. 14 000 freshwater lakes and 220 saline lakes. Additionally, indirect estimates of the mean depth are provided for boreal zone lakes on the basis of their geological origin. See  Choulga et al. 2014 for details. Volume 66 of Tellus A contains Thematic cluster on Parameterization of lakes in numerical weather prediction and climate models with papers from the Third Workshop on Parameterization of Lakes in Numerical Weather Prediction and Climate Modelling 2012 at Finnish Meteorological Insitute, Helsinki. Presentations are still available at the Workshop site. Volume 64 of Tellus A with papers form the 2nd Lake workshop in  Norrk\u00f6ping The online tool FLake-Global has been advertised in \"Data and Software News\" of Environmental Modelling and Software. From now on, please, cite the FLake-Global, when using it in your work, as: Kirillin, G., et al. 2011, FLake-Global: Online lake model with worldwide coverage, Env. Modell. Soft., in press, doi:10.1016/j.envsoft.2010.12.004 Since 15 December 2010 Flake is used operationally at the German Weather Service (DWD)  within the COSMO-EU (Europe) configuration of the COSMO model (see  COSMO web site for details). Presentations from the 2nd Workshop on Parameterization of Lakes in Numerical Weather Prediction and Climate Modelling at SMHI, Norrk\u00f6ping, September 15-17 2010 (\"2nd FLake Workshop\") are available now as pdf's. A special issue of Tellus A with selected works is planned. Volume 15, Number 2  of Boreal Environment Research - A Special Issue on results from the 1st Workshop on Parameterization of Lakes in Numerical Weather Prediction and Climate Modelling Most recent FLake-related publications: Kienel, U., Kirillin, G., Brademann, B., Plessen, B., Lampe, R., & Brauer, A. (2017). Effects of spring warming and mixing duration on diatom deposition in deep Tiefer See, NE Germany. Journal of Paleolimnology, 57(1):37-49. Kirillin, G., & Shatwell, T. (2016). Generalized scaling of seasonal thermal stratification in lakes. Earth-Science Reviews, 161, 179-190. Layden, A., MacCallum, S. N., & Merchant, C. J. (2016). Determining lake surface water temperatures worldwide using a tuned one-dimensional lake model (FLake, v1). Geoscientific Model Development, 9(6), 2167-2189. Le Moigne, P., Colin, J., & Decharme, B. (2016). Impact of lake surface temperatures simulated by the FLake scheme in the CNRM-CM5 climate model. Tellus A, 68. Thiery, W., Davin, E. L., Seneviratne, S. I., Bedka, K., Lhermitte, S., & van Lipzig, N. P. (2016). Hazardous thunderstorm intensification over Lake Victoria. Nature Communications, 7. Full list of publications TEST"
+  }
+]

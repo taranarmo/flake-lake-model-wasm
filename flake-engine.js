@@ -59,7 +59,10 @@ class FLakeEngine {
     // Try fetching flake.wasm (works under HTTP/HTTPS)
     try {
       if (typeof fetch === 'function' && typeof location !== 'undefined' && location.protocol !== 'file:') {
-        const response = await fetch('flake.wasm');
+        let response = await fetch('flake.wasm');
+        if (!response.ok) {
+          response = await fetch('../flake.wasm');
+        }
         if (response.ok) {
           wasmBytes = await response.arrayBuffer();
         }

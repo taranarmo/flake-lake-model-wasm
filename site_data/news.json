@@ -1,0 +1,51 @@
+[
+  {
+    "title": "5th Workshop on \u201cParameterization of Lakes in Numerical Weather Prediction and Climate Modelling\u201d (LAKE 2017)",
+    "date": "16-19 October 2017",
+    "location": "Berlin, Germany",
+    "url": "http://www.flake.igb-berlin.de/Lake17",
+    "description": "Held in Berlin, Germany, focusing on recent developments in lake parameterization schemes for atmospheric models."
+  },
+  {
+    "title": "4th Workshop on \u201cParameterization of Lakes in Numerical Weather Prediction and Climate Modelling\u201d (LAKE 2015)",
+    "date": "07-09 May 2015",
+    "location": "\u00c9vora, Portugal",
+    "url": "http://www.lake15.cge.uevora.pt/",
+    "description": "Presentations and workshop summary covering lake-atmosphere interactions and lake modeling."
+  },
+  {
+    "title": "Global Lake Database Version 2 (GLDBv2) Released",
+    "date": "2014",
+    "location": "Worldwide",
+    "url": "external-data.html",
+    "description": "Dataset comprising ca. 14,000 freshwater lakes and 220 saline lakes with indirect mean depth estimates based on geological origin (Choulga et al. 2014)."
+  },
+  {
+    "title": "Tellus A Special Issue on Lake Parameterization (LAKE 2012)",
+    "date": "2014",
+    "location": "Helsinki, Finland",
+    "url": "http://www.tellusa.net/index.php/tellusa/issue/view/1605",
+    "description": "Volume 66 of Tellus A thematic cluster with papers from the 3rd Workshop at the Finnish Meteorological Institute (FMI)."
+  },
+  {
+    "title": "FLake Operational in ICON and ECMWF IFS",
+    "date": "2015",
+    "location": "DWD & ECMWF",
+    "url": "apps.html",
+    "description": "FLake went operational in DWD ICON on 20 January 2015, and in ECMWF Integrated Forecasting System (IFS) on 12 May 2015."
+  },
+  {
+    "title": "FLake Operational at German Weather Service (DWD)",
+    "date": "2010 - 2012",
+    "location": "Offenbach, Germany",
+    "url": "apps.html",
+    "description": "Operational within COSMO-EU since 15 December 2010, and within COSMO-DE convection-permitting ensemble (2.8 km mesh) since 18 April 2012."
+  },
+  {
+    "title": "FLake-Global Online Tool Published in Env. Modell. Soft.",
+    "date": "2011",
+    "location": "International",
+    "url": "http://dx.doi.org/10.1016/j.envsoft.2010.12.004",
+    "description": "Kirillin et al. (2011), FLake-Global: Online lake model with worldwide coverage, Environmental Modelling & Software."
+  }
+]

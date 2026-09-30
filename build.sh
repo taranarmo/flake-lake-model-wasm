@@ -37,5 +37,11 @@ cat << JS_EOF > "${SCRIPT_DIR}/wasm-base64.js"
 (typeof window !== "undefined" ? window : globalThis).FLAKE_WASM_BASE64 = "${WASM_B64}";
 JS_EOF
 
+if [ -d "${SCRIPT_DIR}/model" ]; then
+  cp "${SCRIPT_DIR}/flake.wasm" "${SCRIPT_DIR}/model/"
+  cp "${SCRIPT_DIR}/wasm-base64.js" "${SCRIPT_DIR}/model/"
+fi
+
 echo "=== Build completed successfully! ==="
 ls -lh "${SCRIPT_DIR}/flake.wasm" "${SCRIPT_DIR}/wasm-base64.js"
+

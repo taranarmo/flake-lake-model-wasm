@@ -1,0 +1,76 @@
+<header class="site-header">
+  <div class="top-bar">
+    <div class="top-bar-inner">
+      <div class="top-bar-left">
+        <span>Leibniz Institute of Freshwater Ecology & Inland Fisheries (IGB) • German Weather Service (DWD)</span>
+      </div>
+      <div class="top-bar-right">
+        <a href="{{ base_url }}contacts.html">Contact Us</a>
+        <a href="https://github.com/taranarmo/flake-lake-model" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="nav-container">
+    <a href="{{ base_url }}index.html" class="brand">
+      <div class="brand-logo"><span class="brand-mark">FL</span></div>
+      <div class="brand-text">
+        <h1>FLake</h1>
+        <span class="brand-subtitle">Freshwater Lake Thermodynamic Model</span>
+      </div>
+    </a>
+
+    <button class="mobile-toggle" aria-label="Toggle navigation menu" aria-expanded="false">Menu</button>
+
+    <ul class="nav-menu">
+      <li class="nav-item">
+        <a href="{{ base_url }}index.html" class="nav-link {% if active_page == 'home' %}active{% endif %}">Home</a>
+      </li>
+      <li class="nav-item">
+        <a href="{{ base_url }}apps.html" class="nav-link {% if active_page == 'apps' %}active{% endif %}">Applications</a>
+      </li>
+      <li class="nav-item">
+        <a href="{{ base_url }}users.html" class="nav-link {% if active_page == 'users' %}active{% endif %}">Users</a>
+      </li>
+      <li class="nav-item">
+        <a href="#" class="nav-link {% if active_page in ['docs', 'hints', 'papers'] %}active{% endif %}">
+          Docs & Info <span class="dropdown-arrow"></span>
+        </a>
+        <ul class="dropdown-menu">
+          <li><a href="{{ base_url }}docs.html" class="dropdown-link">Documentation & Routines</a></li>
+          <li><a href="{{ base_url }}hints.html" class="dropdown-link">Useful Hints</a></li>
+          <li><a href="{{ base_url }}papers.html" class="dropdown-link">Publications</a></li>
+        </ul>
+      </li>
+      <li class="nav-item">
+        <a href="#" class="nav-link {% if active_page in ['downloads', 'test-runs', 'external-data', 'observational-data'] %}active{% endif %}">
+          Downloads & Data <span class="dropdown-arrow"></span>
+        </a>
+        <ul class="dropdown-menu">
+          <li><a href="{{ base_url }}downloads.html" class="dropdown-link">Model Downloads & Code</a></li>
+          <li><a href="{{ base_url }}test-runs.html" class="dropdown-link">Test Runs & Verification</a></li>
+          <li><a href="{{ base_url }}external-data.html" class="dropdown-link">Global Lake Database (GLDB)</a></li>
+          <li><a href="{{ base_url }}observational-data.html" class="dropdown-link">Observational Data Sets</a></li>
+        </ul>
+      </li>
+      <li class="nav-item">
+        <a href="#" class="nav-link {% if active_page in ['links', 'forum'] %}active{% endif %}">
+          Community <span class="dropdown-arrow"></span>
+        </a>
+        <ul class="dropdown-menu">
+          <li><a href="{{ base_url }}links.html" class="dropdown-link">Related Models & Links</a></li>
+          <li><a href="{{ base_url }}forum.html" class="dropdown-link">Discussion Forum</a></li>
+        </ul>
+      </li>
+      <li class="nav-item">
+        <a href="{{ base_url }}contacts.html" class="nav-link {% if active_page == 'contacts' %}active{% endif %}">Contact</a>
+      </li>
+      <li class="nav-item">
+        <a href="{{ base_url }}model/" class="nav-cta" title="Launch client-side WebAssembly simulation">
+          <span>Online Model</span>
+          <span class="badge-wasm-pill">WASM</span>
+        </a>
+      </li>
+    </ul>
+  </div>
+</header>
