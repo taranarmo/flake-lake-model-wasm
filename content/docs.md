@@ -19,7 +19,7 @@ This section provides scientific and technical documentation of the **FLake** mo
 
 ## Table of Contents
 
-- [Conventions & Code Architecture](#conventions)
+- [Conventions and Code Architecture](#conventions)
 - [FLake Interface (`src_flake_interface_1D.f90`)](#interface)
 - [Routines of the Lake Model FLake](#routines-flake)
 - [Routines of the Surface-Layer Scheme SfcFlx](#routines-sfcflx)
@@ -27,7 +27,7 @@ This section provides scientific and technical documentation of the **FLake** mo
 
 ---
 
-<h2 id="conventions">Conventions & Code Architecture</h2>
+## Conventions and Code Architecture {#conventions}
 
 FLake is coded in **Fortran 90** following modular conventions:
 
@@ -37,7 +37,7 @@ FLake is coded in **Fortran 90** following modular conventions:
 - Core mathematical expressions are factored into cleanly organized `.incf` include files for portability and readability.
 - The WebAssembly edition is compiled directly from these Fortran 90 sources using **LFortran**.
 
-<h2 id="interface">FLake Interface (`src_flake_interface_1D.f90`)</h2>
+## FLake Interface (`src_flake_interface_1D.f90`) {#interface}
 
 The interface module `src_flake_interface_1D.f90` bridges the host driving system (e.g. NWP model or standalone driver) with the FLake core. It manages:
 
@@ -46,7 +46,7 @@ The interface module `src_flake_interface_1D.f90` bridges the host driving syste
 - Calling `flake_driver` to advance lake temperature, mixed layer depth ($h_{ML}$), bottom temperature ($T_{bot}$), shape factor ($C_T$), and ice/snow thickness ($h_{ice}$, $h_{snow}$).
 - Calling `SfcFlx` routines to compute turbulent surface fluxes of momentum, sensible heat, and latent heat.
 
-<h2 id="routines-flake">Routines of the Lake Model FLake</h2>
+## Routines of the Lake Model FLake {#routines-flake}
 
 | File / Module | Purpose & Description |
 | :--- | :--- |
@@ -63,7 +63,7 @@ The interface module `src_flake_interface_1D.f90` bridges the host driving syste
 | `flake_snowdensity.incf` | Prognostic evolution of snow density under aging, compaction, and percolation. |
 | `flake_snowheatconduct.incf` | Thermal conductivity of snow and ice as functions of density and temperature. |
 
-<h2 id="routines-sfcflx">Routines of the Surface-Layer Scheme SfcFlx</h2>
+## Routines of the Surface-Layer Scheme SfcFlx {#routines-sfcflx}
 
 The **SfcFlx** package computes aerodynamic fluxes over water surfaces:
 
@@ -79,7 +79,7 @@ The **SfcFlx** package computes aerodynamic fluxes over water surfaces:
 | `SfcFlx_spechum.incf` | Specific humidity calculation from vapor pressure and atmospheric pressure. |
 | `SfcFlx_wvpreswetbulb.incf` | Psychrometric wet-bulb temperature formulation. |
 
-<h2 id="references">Key Documentation References</h2>
+## Key Documentation References {#references}
 
 - **Mironov, D. V., 2008:** *Parameterization of lakes in numerical weather prediction. Description of a lake model.* COSMO Technical Report, No. 11, Deutscher Wetterdienst, Offenbach am Main, Germany, 41 pp.
 - **Mironov, D., E. Heise, E. Kourzeneva, B. Ritter, N. Schneider, and A. Terzhevik, 2010:** *Implementation of the lake parameterisation scheme FLake into the numerical weather prediction model COSMO.* Boreal Env. Res., 15, 218–230.

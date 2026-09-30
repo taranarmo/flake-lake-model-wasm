@@ -9,16 +9,8 @@ breadcrumbs:
 has_sidebar: true
 ---
 
-## FLake Community & Discussion Forum
+## Discussion Channels
 
-Join the community of researchers, meteorologists, and limnologists using and developing FLake.
-
-> **FLake Discussion Group (Google Groups)**  
-> The official mailing list and forum for FLake announcements, coupling questions, troubleshooting, and modeling tips:  
-> [Open FLake Forum on Google Groups](https://groups.google.com/g/lakemodel)
-
-## Community Channels
-
-- **Mailing List:** Send questions or discussion topics to `lakemodel@googlegroups.com` (subscription required).
-- **GitHub Discussions & Issues:** For source code questions, WebAssembly feedback, or build issues, please use the [GitHub Issues tracker](https://github.com/taranarmo/flake-lake-model/issues).
-- **Contact:** Visit the [Contacts page](contacts.html) for general project inquiries.
+- **Mailing List:** `lakemodel@googlegroups.com`
+- **GitHub Discussions & Issues:** [GitHub Issues Tracker](https://github.com/taranarmo/flake-lake-model/issues)
+- **Web Simulation:** Try the model online in the [WebAssembly Model](model/) section.

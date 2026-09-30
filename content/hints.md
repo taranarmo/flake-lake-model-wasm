@@ -18,35 +18,31 @@ FLake is a computationally efficient one-dimensional bulk model. The guidance be
 
 FLake uses a single depth parameter: the **mean lake depth** $D$ (volume divided by surface area):
 
-- **Basin-Mean vs. Maximum Depth:** For predicting surface water temperature ($T_{sfc}$) and area-averaged energy fluxes, experience confirms that *mean lake depth* yields the most accurate results, not the maximum sounding depth.
-- **Shallow Lakes ($D < 3\text{–}5\text{ m}$):** In very shallow polymictic lakes, wind and convective mixing frequently mix the entire water column to the bottom. Bottom sediment heat exchange plays an especially critical role here.
-- **Deep Lakes ($D > 40\text{–}50\text{ m}$):** In very deep lakes, the hypolimnion remains isolated and near $4^\circ\text{C}$ year-round. Because FLake assumes a self-similar profile between mixed-layer base and the bottom, setting an artificial "effective depth" of around 40–50 m is sometimes beneficial when deep hypolimnion dynamics are not the primary focus.
-- **Global Depth Fields:** In NWP applications, use depth fields from the [Global Lake Database (GLDB)](external-data.html).
+- **Mean Depth vs. Max Depth:** Always use the *mean depth* of the water body rather than the deepest sounding point.
+- **Deep Lakes:** If the actual lake is very deep (e.g. deeper than 50 m), setting the depth to an *effective depth* of 40–50 m is strongly recommended. FLake is parameterized for lakes where the wind-mixed layer interacts with the bottom or seasonal metalimnion; in extremely deep lakes without bottom thermal communication, deeper layers remain decoupled from annual atmospheric variations.
+- **Very Shallow Lakes:** For water bodies shallower than 1–2 m, ensure adequate numerical stability by maintaining realistic time steps ($\\Delta t \\le 3600\\text{ s}$).
 
-## 2. Optical Characteristics of Lake Water
+## 2. Optical Characteristics & Light Extinction
 
-Solar radiation penetration is governed by the light extinction coefficient $c_{extin}$ (Beer-Lambert law):
+The optical extinction coefficient $\\gamma$ governs the depth of solar radiation penetration into the water column:
 
-- **Default Recommendation:** In the absence of measured optical data, a value of $c_{extin} = 1.0\text{ m}^{-1}$ is standard for mesotrophic lakes.
-- **Oligotrophic / Clear Water:** Clear lakes (e.g. Lake Stechlin, Lake Baikal) have $c_{extin} \approx 0.15\text{–}0.3\text{ m}^{-1}$, allowing solar penetration into the metalimnion and driving deep heating.
-- **Eutrophic / Turbid Water:** Turbid, algae-rich lakes (e.g. Lake Müggelsee) exhibit $c_{extin} > 2.0\text{–}4.0\text{ m}^{-1}$, trapping nearly all solar heating in the uppermost meter.
+- **Clear Waters:** In oligotrophic, transparent lakes, use low extinction ($\gamma \approx 0.15 - 0.3\\text{ m}^{-1}$). Solar radiation penetrates deeply into the hypolimnion, warming subsurface layers directly.
+- **Turbid / Humic Waters:** In shallow polymictic or eutrophic lakes, light is absorbed within the upper tens of centimeters ($\gamma \ge 1.0 - 2.0\\text{ m}^{-1}$).
+- **Default Baseline:** If lake transparency is unknown, an extinction coefficient of $\gamma = 0.5\\text{ m}^{-1}$ serves as a robust global default.
 
-## 3. Thermally Active Bottom Sediments
+## 3. Bottom Sediments & Geothermal Heat Flux
 
-FLake includes an optional module for bottom sediment heat storage:
+FLake includes a thermally active upper sediment layer sub-model:
 
-- **Sediment Depth ($H_{sed}$):** The thermally active sediment layer depth is typically set to $10\text{ m}$. Below this depth, seasonal temperature fluctuations are attenuated to near zero.
-- **Lower Boundary Condition:** The temperature at $z = D + H_{sed}$ can be approximated by the climatological annual mean 2m air temperature, or initialized with zero geothermal heat flux.
-- **Importance:** Sediments buffer heat—storing energy in summer and releasing it into the water column during autumn and winter, which delays autumn cooling and winter ice onset.
+- In shallow lakes ($D < 5\\text{ m}$), bottom sediment heat exchange plays a critical role in the seasonal heat budget and spring warming onset.
+- In deep stratifying lakes ($D > 20\\text{ m}$), the sediment sub-model can be switched off (`lflk_botsed_use = .false.`) with negligible influence on mixed-layer temperature.
 
-## 4. Model Initialization & Spin-Up
+## 4. Atmospheric Forcing Requirements
 
-- **Homothermy Initialization:** The ideal time to initialize FLake from scratch is during seasonal *turnover* (spring or late autumn), when the lake is nearly isothermal at approximately $4^\circ\text{C}$ with $h_{ML} = D$.
-- **Spin-Up Period:** When initializing from arbitrary states, run FLake through a spin-up period of 1 to 2 annual cycles so that the sediment temperatures and thermocline structure reach equilibrium with the atmospheric forcing.
+FLake expects surface atmospheric forcing at each time step $\Delta t$:
 
-## 5. Time Step Selection
-
-FLake's ODE system is computationally stable across a wide range of time steps:
-
-- **Standalone Simulations:** A time step of $\Delta t = 3600\text{ s}$ (1 hour) is optimal and aligns with typical hourly meteorological datasets.
-- **NWP / Climate Coupling:** FLake can be called directly at the atmospheric host timestep (e.g. 10 to 60 seconds) without numerical degradation.
+1. **Shortwave Solar Radiation:** Surface downward net or global radiation ($I_{atm}$, $\\text{W m}^{-2}$).
+2. **Longwave Atmospheric Radiation:** Downward longwave radiation ($F_{atm}$, $\\text{W m}^{-2}$).
+3. **Wind Speed:** Surface horizontal wind speed ($U$, $\\text{m s}^{-1}$) at 10 m elevation.
+4. **Air Temperature & Humidity:** Air temperature ($T_a$, $\\text{K}$) and specific humidity ($q_a$, $\\text{kg kg}^{-1}$) at 2 m elevation.
+5. **Surface Air Pressure:** Pressure ($p_a$, $\\text{N m}^{-2}$) at surface level.

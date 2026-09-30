@@ -947,6 +947,131 @@ blockquote {
   text-decoration: none;
 }
 
+/* Pure Markdown support for Publications */
+.page-papers .content-article ul {
+  list-style: none;
+  padding-left: 0;
+  margin-bottom: 2rem;
+}
+
+.page-papers .content-article ul li {
+  padding: 1.1rem 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.925rem;
+  line-height: 1.6;
+}
+
+.page-papers .content-article ul li a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-accent);
+  background-color: var(--color-bg-alt);
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-sm);
+  margin-left: 0.35rem;
+}
+
+.page-papers .content-article ul li a:hover {
+  background-color: var(--color-accent);
+  color: #ffffff;
+  text-decoration: none;
+}
+
+/* Pure Markdown support for Users Directory */
+.page-users .content-article ul {
+  list-style: none;
+  padding-left: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.page-users .content-article ul li {
+  background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  line-height: 1.5;
+  font-size: 0.925rem;
+}
+
+.page-users .content-article ul li:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-accent);
+}
+
+.page-users .content-article ul li strong:first-child {
+  font-size: 1.05rem;
+  color: var(--color-primary-dark);
+  margin-bottom: 0.5rem;
+  display: block;
+}
+
+:root[data-theme="dark"] .page-users .content-article ul li strong:first-child {
+  color: #f8fafc;
+}
+
+/* Numbered highlights list on home page when written in pure Markdown */
+.page-home .content-article ol {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.25rem;
+  list-style: none;
+  counter-reset: highlight-counter;
+  padding-left: 0;
+  margin: 1.5rem 0 2rem;
+}
+
+.page-home .content-article ol li {
+  counter-increment: highlight-counter;
+  position: relative;
+  background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 1.25rem 1.25rem 1.25rem 3.5rem;
+  box-shadow: var(--shadow-sm);
+  line-height: 1.5;
+  font-size: 0.925rem;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.page-home .content-article ol li:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-accent);
+}
+
+.page-home .content-article ol li::before {
+  content: counter(highlight-counter, decimal-leading-zero);
+  position: absolute;
+  left: 1rem;
+  top: 1.25rem;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+}
+
+.page-home .content-article ol li strong:first-child {
+  display: block;
+  font-size: 1rem;
+  color: var(--color-primary-dark);
+  margin-bottom: 0.35rem;
+}
+
+:root[data-theme="dark"] .page-home .content-article ol li strong:first-child {
+  color: #f8fafc;
+}
+
 /* Tabs System (for Test Runs) */
 .tab-nav {
   display: flex;

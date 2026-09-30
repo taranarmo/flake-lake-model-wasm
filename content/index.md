@@ -9,69 +9,29 @@ is_home: true
 hero_badge: "WebAssembly Edition • 100% Client-Side Simulation"
 ---
 
-<div class="wasm-callout">
-  <div class="wasm-callout-text">
-    <h3>Experience FLake Live in Your Browser</h3>
-    <p>
-      The complete Fortran 90 thermodynamic core is compiled directly to WebAssembly using <strong>LFortran</strong>. Explore seasonal stratification, ice sheet growth, mixed-layer convective entrainment, or run single-step ODE calculations—all locally on your device with <strong>zero server backend required</strong>.
-    </p>
-  </div>
-  <a href="model/" class="wasm-callout-btn">Launch Simulation</a>
-</div>
-
 ## What is FLake?
 
 **FLake (Freshwater Lake model)** is a bulk parameterization scheme designed to predict the vertical temperature profile, mixed-layer dynamics, and ice cover of inland water bodies. Developed through an international collaboration between the **Deutscher Wetterdienst (DWD)** and the **Leibniz Institute of Freshwater Ecology and Inland Fisheries (IGB Berlin)**, FLake is widely used as an operational lake parameterization in numerical weather prediction (NWP), regional and global climate models, limnological ecosystem studies, and physical education.
 
-<div class="feature-cards">
-  <div class="feature-card">
-    <div class="feature-number">01</div>
-    <h3>Concept of Self-Similarity</h3>
-    <p>
-      Parametric two-layer representation using assumed shape functions for the lake thermocline, thermally active bottom sediments, and ice/snow layers, preserving key vertical physics with minimal computational cost.
-    </p>
-  </div>
+## Core Features
 
-  <div class="feature-card">
-    <div class="feature-number">02</div>
-    <h3>Convective & Wind Mixing</h3>
-    <p>
-      Advanced formulations for mixed-layer depth including convective entrainment equations and relaxation-type wind mixing, accounting for the volumetric absorption of solar radiation.
-    </p>
-  </div>
+1. **Concept of Self-Similarity**  
+   Parametric two-layer representation using assumed shape functions for the lake thermocline, thermally active bottom sediments, and ice/snow layers, preserving key vertical physics with minimal computational cost.
 
-  <div class="feature-card">
-    <div class="feature-number">03</div>
-    <h3>Thermodynamic Ice & Snow</h3>
-    <p>
-      Complete module for ice accretion, surface melt, white-ice formation, snow compaction, and albedo variation under sub-zero atmospheric forcing conditions.
-    </p>
-  </div>
+2. **Convective & Wind Mixing**  
+   Advanced formulations for mixed-layer depth including convective entrainment equations and relaxation-type wind mixing, accounting for the volumetric absorption of solar radiation.
 
-  <div class="feature-card">
-    <div class="feature-number">04</div>
-    <h3>No Re-Tuning Required</h3>
-    <p>
-      Empirical constants are estimated from independent physical datasets and should not be re-evaluated for individual lakes, preserving robust predictive power without over-fitting.
-    </p>
-  </div>
+3. **Thermodynamic Ice & Snow**  
+   Complete module for ice accretion, surface melt, white-ice formation, snow compaction, and albedo variation under sub-zero atmospheric forcing conditions.
 
-  <div class="feature-card">
-    <div class="feature-number">05</div>
-    <h3>Lake Surface Fluxes (SfcFlx)</h3>
-    <p>
-      Dedicated boundary-layer scheme with fetch-dependent aerodynamic roughness, roughness Reynolds numbers for scalars, and free-convection transfer laws for calm winds.
-    </p>
-  </div>
+4. **No Re-Tuning Required**  
+   Empirical constants are estimated from independent physical datasets and should not be re-evaluated for individual lakes, preserving robust predictive power without over-fitting.
 
-  <div class="feature-card">
-    <div class="feature-number">06</div>
-    <h3>Global Coverage (GLDB)</h3>
-    <p>
-      Supported by the Global Lake Database (GLDB v1 and v2), providing high-resolution lake fraction and mean bathymetric depth for over 14,000 lakes worldwide.
-    </p>
-  </div>
-</div>
+5. **Lake Surface Fluxes (SfcFlx)**  
+   Dedicated boundary-layer scheme with fetch-dependent aerodynamic roughness, roughness Reynolds numbers for scalars, and free-convection transfer laws for calm winds.
+
+6. **Global Coverage (GLDB)**  
+   Supported by the Global Lake Database (GLDB v1 and v2), providing high-resolution lake fraction and mean bathymetric depth for over 14,000 lakes worldwide.
 
 ## Model Physical Principles
 

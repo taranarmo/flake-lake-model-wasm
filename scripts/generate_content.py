@@ -6,7 +6,8 @@
 # ]
 # ///
 """
-Generates initial markdown content files from site data and templates.
+Generates pure markdown content files (content/*.md) from site data.
+All files are authored in 100% pure Markdown with standard frontmatter.
 """
 
 import os
@@ -32,14 +33,12 @@ has_sidebar: true
 
 ## Contact Information
 
-<div style="min-height: 200px;">
-  <!-- Contacts page intentionally empty -->
-</div>
+Contact information is currently being updated. For model questions and community discussions, visit the [Discussion Forum](forum.html) or browse the [Documentation](docs.html).
 """)
 
 # 2. hints.md
 with open(os.path.join(CONTENT_DIR, "hints.md"), "w", encoding="utf-8") as f:
-    f.write("""---
+    f.write(r"""---
 title: Useful Hints & Guidance
 page_title: Useful Hints & Best Practices
 page_subtitle: Guidelines on lake depth, optical clarity, sediments, and the tuning-free philosophy.
@@ -59,89 +58,66 @@ FLake is a computationally efficient one-dimensional bulk model. The guidance be
 
 FLake uses a single depth parameter: the **mean lake depth** $D$ (volume divided by surface area):
 
-- **Basin-Mean vs. Maximum Depth:** For predicting surface water temperature ($T_{sfc}$) and area-averaged energy fluxes, experience confirms that *mean lake depth* yields the most accurate results, not the maximum sounding depth.
-- **Shallow Lakes ($D < 3\\text{–}5\\text{ m}$):** In very shallow polymictic lakes, wind and convective mixing frequently mix the entire water column to the bottom. Bottom sediment heat exchange plays an especially critical role here.
-- **Deep Lakes ($D > 40\\text{–}50\\text{ m}$):** In very deep lakes, the hypolimnion remains isolated and near $4^\\circ\\text{C}$ year-round. Because FLake assumes a self-similar profile between mixed-layer base and the bottom, setting an artificial "effective depth" of around 40–50 m is sometimes beneficial when deep hypolimnion dynamics are not the primary focus.
-- **Global Depth Fields:** In NWP applications, use depth fields from the [Global Lake Database (GLDB)](external-data.html).
+- **Mean Depth vs. Max Depth:** Always use the *mean depth* of the water body rather than the deepest sounding point.
+- **Deep Lakes:** If the actual lake is very deep (e.g. deeper than 50 m), setting the depth to an *effective depth* of 40–50 m is strongly recommended. FLake is parameterized for lakes where the wind-mixed layer interacts with the bottom or seasonal metalimnion; in extremely deep lakes without bottom thermal communication, deeper layers remain decoupled from annual atmospheric variations.
+- **Very Shallow Lakes:** For water bodies shallower than 1–2 m, ensure adequate numerical stability by maintaining realistic time steps ($\\Delta t \\le 3600\\text{ s}$).
 
-## 2. Optical Characteristics of Lake Water
+## 2. Optical Characteristics & Light Extinction
 
-Solar radiation penetration is governed by the light extinction coefficient $c_{extin}$ (Beer-Lambert law):
+The optical extinction coefficient $\\gamma$ governs the depth of solar radiation penetration into the water column:
 
-- **Default Recommendation:** In the absence of measured optical data, a value of $c_{extin} = 1.0\\text{ m}^{-1}$ is standard for mesotrophic lakes.
-- **Oligotrophic / Clear Water:** Clear lakes (e.g. Lake Stechlin, Lake Baikal) have $c_{extin} \\approx 0.15\\text{–}0.3\\text{ m}^{-1}$, allowing solar penetration into the metalimnion and driving deep heating.
-- **Eutrophic / Turbid Water:** Turbid, algae-rich lakes (e.g. Lake Müggelsee) exhibit $c_{extin} > 2.0\\text{–}4.0\\text{ m}^{-1}$, trapping nearly all solar heating in the uppermost meter.
+- **Clear Waters:** In oligotrophic, transparent lakes, use low extinction ($\gamma \approx 0.15 - 0.3\\text{ m}^{-1}$). Solar radiation penetrates deeply into the hypolimnion, warming subsurface layers directly.
+- **Turbid / Humic Waters:** In shallow polymictic or eutrophic lakes, light is absorbed within the upper tens of centimeters ($\gamma \ge 1.0 - 2.0\\text{ m}^{-1}$).
+- **Default Baseline:** If lake transparency is unknown, an extinction coefficient of $\gamma = 0.5\\text{ m}^{-1}$ serves as a robust global default.
 
-## 3. Thermally Active Bottom Sediments
+## 3. Bottom Sediments & Geothermal Heat Flux
 
-FLake includes an optional module for bottom sediment heat storage:
+FLake includes a thermally active upper sediment layer sub-model:
 
-- **Sediment Depth ($H_{sed}$):** The thermally active sediment layer depth is typically set to $10\\text{ m}$. Below this depth, seasonal temperature fluctuations are attenuated to near zero.
-- **Lower Boundary Condition:** The temperature at $z = D + H_{sed}$ can be approximated by the climatological annual mean 2m air temperature, or initialized with zero geothermal heat flux.
-- **Importance:** Sediments buffer heat—storing energy in summer and releasing it into the water column during autumn and winter, which delays autumn cooling and winter ice onset.
+- In shallow lakes ($D < 5\\text{ m}$), bottom sediment heat exchange plays a critical role in the seasonal heat budget and spring warming onset.
+- In deep stratifying lakes ($D > 20\\text{ m}$), the sediment sub-model can be switched off (`lflk_botsed_use = .false.`) with negligible influence on mixed-layer temperature.
 
-## 4. Model Initialization & Spin-Up
+## 4. Atmospheric Forcing Requirements
 
-- **Homothermy Initialization:** The ideal time to initialize FLake from scratch is during seasonal *turnover* (spring or late autumn), when the lake is nearly isothermal at approximately $4^\\circ\\text{C}$ with $h_{ML} = D$.
-- **Spin-Up Period:** When initializing from arbitrary states, run FLake through a spin-up period of 1 to 2 annual cycles so that the sediment temperatures and thermocline structure reach equilibrium with the atmospheric forcing.
+FLake expects surface atmospheric forcing at each time step $\Delta t$:
 
-## 5. Time Step Selection
-
-FLake's ODE system is computationally stable across a wide range of time steps:
-
-- **Standalone Simulations:** A time step of $\\Delta t = 3600\\text{ s}$ (1 hour) is optimal and aligns with typical hourly meteorological datasets.
-- **NWP / Climate Coupling:** FLake can be called directly at the atmospheric host timestep (e.g. 10 to 60 seconds) without numerical degradation.
+1. **Shortwave Solar Radiation:** Surface downward net or global radiation ($I_{atm}$, $\\text{W m}^{-2}$).
+2. **Longwave Atmospheric Radiation:** Downward longwave radiation ($F_{atm}$, $\\text{W m}^{-2}$).
+3. **Wind Speed:** Surface horizontal wind speed ($U$, $\\text{m s}^{-1}$) at 10 m elevation.
+4. **Air Temperature & Humidity:** Air temperature ($T_a$, $\\text{K}$) and specific humidity ($q_a$, $\\text{kg kg}^{-1}$) at 2 m elevation.
+5. **Surface Air Pressure:** Pressure ($p_a$, $\\text{N m}^{-2}$) at surface level.
 """)
 
-# 3. apps.md
-with open(os.path.join(CONTENT_DIR, "apps.md"), "w", encoding="utf-8") as f:
+# 3. links.md
+with open(os.path.join(CONTENT_DIR, "links.md"), "w", encoding="utf-8") as f:
     f.write("""---
-title: Applications in NWP & Climate
-page_title: Model Applications
-page_subtitle: Operational Numerical Weather Prediction, global climate models, and physical limnology.
-active_page: apps
+title: Related Links & Projects
+page_title: Related Models & Projects
+page_subtitle: Collaborative research initiatives, partner institutes, and related lake models.
+active_page: links
 breadcrumbs:
-  - name: Applications
+  - name: Community
+  - name: Links
 has_sidebar: true
 ---
 
-## FLake Applications Overview
+## Collaborative Research Initiatives
 
-**FLake** is suitable for a wide spectrum of environmental modeling applications. It can be used as a lake parameterisation scheme in numerical weather prediction (NWP), regional and global climate models, as a physical hydrodynamic module in aquatic ecological models, as a standalone single-column lake model, and as an educational tool for physical limnology.
+FLake development and international verification have been supported by numerous joint research initiatives:
 
-## Lake Parameterisation in NWP & Climate Models
+- **Lake Model Intercomparison Project (LakeMIP):** An international initiative coordinating the systematic intercomparison and verification of 1D hydrodynamic lake models across diverse lake regimes worldwide.
+- **EU INTAS Projects:** Collaborative European-Russian research projects focused on convective boundary layer dynamics, surface fluxes, and operational lake parameterization in regional climate and NWP models.
 
-As a lake parameterisation scheme, FLake is implemented into limited-area and global NWP models, including **COSMO**, **HIRLAM**, **ICON**, and **IFS**:
+## Institutional Partners
 
-| Model / System | Agency / Institute | Operational Status | Description |
-| :--- | :--- | :--- | :--- |
-| **ICON** | Deutscher Wetterdienst (DWD) | Operational (2015–present) | Global and regional configurations of DWD's next-generation NWP suite. |
-| **IFS / HTESSEL** | ECMWF | Operational (2015–present) | Integrated Forecasting System using HTESSEL surface scheme with lake tile. |
-| **COSMO-EU & COSMO-DE** | DWD / COSMO Consortium | Operational (2010–present) | COSMO-EU (7 km) and convection-permitting COSMO-DE ensemble (2.8 km). |
-| **HIRLAM** | Finnish Meteorological Institute (FMI) | Operational (2012–present) | Operational weather forecasting for the Nordic region. |
-| **SURFEX / ALADIN** | Météo-France | Implemented | Integrated as lake module in the SURFEX externalized surface platform. |
-| **Unified Model / JULES** | UK Met Office | Implemented | Joint UK Land Environment Simulator (JULES) lake parameterization. |
-| **WRF** | NCAR / International Community | Implemented | Coupled into the Weather Research and Forecasting atmospheric model. |
-| **CLM / RCA / CRCM** | NCAR, SMHI, Environment Canada | Research & Climate Runs | Regional and global climate simulations of inland lake thermal regimes. |
+- **Leibniz Institute of Freshwater Ecology and Inland Fisheries (IGB):** Research institute within the Forschungsverbund Berlin e.V. focused on physical limnology, lake ecosystem dynamics, and environmental physics.
+- **Deutscher Wetterdienst (DWD):** The German Meteorological Service, maintaining operational FLake integration inside the global and regional ICON modeling system.
+- **European Centre for Medium-Range Weather Forecasts (ECMWF):** Maintaining FLake within the HTESSEL land surface model of the Integrated Forecasting System (IFS).
 
-### External-Parameter Requirements
+## Related Lake Modeling Codes
 
-In order to be incorporated into an NWP or climate model, FLake requires two-dimensional external parameter fields:
-
-- **Lake Fraction:** The area fraction of a given grid box covered by inland water, compatible with the atmospheric model's land-sea mask.
-- **Lake Depth:** The mean or effective bathymetric depth of lakes within each grid cell. This is provided globally by the [Global Lake Database (GLDB)](external-data.html) developed by E. Kourzeneva and M. Choulga.
-- **Optical Characteristics:** The light extinction coefficient ($c_{extin}$) of lake water. In the absence of global empirical datasets, FLake provides recommended defaults (see [Useful Hints](hints.html)).
-
-## Single-Column Lake & Ecosystem Modelling
-
-FLake is extensively utilized as a standalone physical model driven by observed meteorological time series (air temperature, solar radiation, relative humidity, wind speed). It provides:
-
-- Accurate simulation of epilimnion deepening and seasonal thermocline stratification.
-- Coupling with biogeochemical and ecological models to simulate dissolved oxygen, phytoplankton blooms, and nutrient cycles.
-- High-speed calculation: integrates years of lake thermodynamics in milliseconds, making it ideal for large-scale multi-lake ensemble studies and paleolimnology.
-
-> **Try Single-Column FLake Instantly**  
-> You can experiment with FLake's 1D column physics right now without downloading or compiling any code using the [FLake WebAssembly Online Simulation](model/).
+- **LAKE:** A multi-layer 1D model solving turbulent diffusion equations with detailed gas and biogeochemical cycles (developed by Victor Stepanenko et al.).
+- **GOTM (General Ocean Turbulence Model):** A widely-used 1D water column hydrodynamic model applicable to lakes and coastal waters.
 """)
 
 # 4. docs.md
@@ -167,7 +143,7 @@ This section provides scientific and technical documentation of the **FLake** mo
 
 ## Table of Contents
 
-- [Conventions & Code Architecture](#conventions)
+- [Conventions and Code Architecture](#conventions)
 - [FLake Interface (`src_flake_interface_1D.f90`)](#interface)
 - [Routines of the Lake Model FLake](#routines-flake)
 - [Routines of the Surface-Layer Scheme SfcFlx](#routines-sfcflx)
@@ -175,7 +151,7 @@ This section provides scientific and technical documentation of the **FLake** mo
 
 ---
 
-<h2 id="conventions">Conventions & Code Architecture</h2>
+## Conventions and Code Architecture {#conventions}
 
 FLake is coded in **Fortran 90** following modular conventions:
 
@@ -185,7 +161,7 @@ FLake is coded in **Fortran 90** following modular conventions:
 - Core mathematical expressions are factored into cleanly organized `.incf` include files for portability and readability.
 - The WebAssembly edition is compiled directly from these Fortran 90 sources using **LFortran**.
 
-<h2 id="interface">FLake Interface (`src_flake_interface_1D.f90`)</h2>
+## FLake Interface (`src_flake_interface_1D.f90`) {#interface}
 
 The interface module `src_flake_interface_1D.f90` bridges the host driving system (e.g. NWP model or standalone driver) with the FLake core. It manages:
 
@@ -194,7 +170,7 @@ The interface module `src_flake_interface_1D.f90` bridges the host driving syste
 - Calling `flake_driver` to advance lake temperature, mixed layer depth ($h_{ML}$), bottom temperature ($T_{bot}$), shape factor ($C_T$), and ice/snow thickness ($h_{ice}$, $h_{snow}$).
 - Calling `SfcFlx` routines to compute turbulent surface fluxes of momentum, sensible heat, and latent heat.
 
-<h2 id="routines-flake">Routines of the Lake Model FLake</h2>
+## Routines of the Lake Model FLake {#routines-flake}
 
 | File / Module | Purpose & Description |
 | :--- | :--- |
@@ -211,7 +187,7 @@ The interface module `src_flake_interface_1D.f90` bridges the host driving syste
 | `flake_snowdensity.incf` | Prognostic evolution of snow density under aging, compaction, and percolation. |
 | `flake_snowheatconduct.incf` | Thermal conductivity of snow and ice as functions of density and temperature. |
 
-<h2 id="routines-sfcflx">Routines of the Surface-Layer Scheme SfcFlx</h2>
+## Routines of the Surface-Layer Scheme SfcFlx {#routines-sfcflx}
 
 The **SfcFlx** package computes aerodynamic fluxes over water surfaces:
 
@@ -227,7 +203,7 @@ The **SfcFlx** package computes aerodynamic fluxes over water surfaces:
 | `SfcFlx_spechum.incf` | Specific humidity calculation from vapor pressure and atmospheric pressure. |
 | `SfcFlx_wvpreswetbulb.incf` | Psychrometric wet-bulb temperature formulation. |
 
-<h2 id="references">Key Documentation References</h2>
+## Key Documentation References {#references}
 
 - **Mironov, D. V., 2008:** *Parameterization of lakes in numerical weather prediction. Description of a lake model.* COSMO Technical Report, No. 11, Deutscher Wetterdienst, Offenbach am Main, Germany, 41 pp.
 - **Mironov, D., E. Heise, E. Kourzeneva, B. Ritter, N. Schneider, and A. Terzhevik, 2010:** *Implementation of the lake parameterisation scheme FLake into the numerical weather prediction model COSMO.* Boreal Env. Res., 15, 218–230.
@@ -249,54 +225,17 @@ has_sidebar: true
 
 ## Model Source Codes & Downloads
 
-**FLake** is freely available open-source software distributed under the terms of the **MIT License**. You can download the original Fortran 90 sources, the Windows binary package, or access the modern WebAssembly repository.
+FLake source codes and boundary layer schemes are distributed freely under the **MIT License**.
 
-> **Zero-Install WebAssembly Edition**  
-> Run FLake directly in modern web browsers without installing any compilers or dependencies. The WebAssembly binary is only 27.8 KB and runs entirely on the client side.  
-> [Launch Online Model](model/)
+- **Source Code Archive:** [src_flake_sfcflx.tar.gz (75 KB)](assets/downloads/src_flake_sfcflx.tar.gz) or [src_flake_sfcflx.zip (82 KB)](assets/downloads/src_flake_sfcflx.zip)
+- **Documentation:** [FLake Synopsis (PDF, 107 KB)](assets/papers/flake_synopsis.pdf)
+- **GitHub Repository:** [taranarmo/flake-lake-model](https://github.com/taranarmo/flake-lake-model)
 
-## Download Packages
+## License (MIT)
 
-| Package | Format | Size | Contents | Action |
-| :--- | :--- | :--- | :--- | :--- |
-| **FLake & SfcFlx Sources** | `.tar.gz` | 28 KB | Fortran 90 lake model routines, surface-layer scheme (SfcFlx), and 1D interface. | [Download .tar.gz](assets/downloads/src_flake_sfcflx.tar.gz) |
-| **FLake & SfcFlx Sources** | `.zip` | 44 KB | Fortran 90 source files formatted for Windows and cross-platform environments. | [Download .zip](assets/downloads/src_flake_sfcflx.zip) |
-| **Windows Executable & Test Run** | `.zip` | 245 KB | Pre-compiled `flake.exe` executable, sample namelists, and forcing datasets. | [Download flake.zip](assets/test_run/flake.zip) |
-| **GitHub Repository** | Git / WASM | Online | Full repository with Fortran 90 sources, LFortran build scripts, and WASM web interface. | [View GitHub](https://github.com/taranarmo/flake-lake-model) |
+```text
+Copyright (c) 2008-2026 Dmitrii Mironov, Georgiy Kirillin, and FLake Developers
 
-## Quick Compilation Guide
-
-### Compiling to WebAssembly (via LFortran)
-
-The WebAssembly build leverages **LFortran**:
-
-```bash
-# Prerequisites: lfortran 0.65.0, llc (llvm-tools), wasm-ld (lld)
-./build.sh
-
-# Or using Makefile
-make build
-```
-
-### Compiling Native Binary (via GNU Fortran)
-
-```bash
-# Compile all modules in dependency order
-gfortran -O3 -c data_parameters.f90
-gfortran -O3 -c flake_derivedtypes.f90
-gfortran -O3 -c flake_parameters.f90
-gfortran -O3 -c flake_configure.f90
-gfortran -O3 -c flake_albedo_ref.f90
-gfortran -O3 -c flake_paramoptic_ref.f90
-gfortran -O3 -c flake.f90
-gfortran -O3 -c SfcFlx.f90
-gfortran -O3 -c src_flake_interface_1D.f90
-gfortran -O3 *.o -o flake_run
-```
-
-## MIT License Terms
-
-```
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights
@@ -306,14 +245,38 @@ furnished to do so, subject to the following conditions:
 
 The above copyright notice and this permission notice shall be included in all
 copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
 ```
 """)
 
-# 6. external-data.md
+# 6. apps.md
+with open(os.path.join(CONTENT_DIR, "apps.md"), "w", encoding="utf-8") as f:
+    f.write("""---
+title: Applications in NWP & Climate
+page_title: Model Applications
+page_subtitle: Operational Numerical Weather Prediction, global climate models, and physical limnology.
+active_page: apps
+breadcrumbs:
+  - name: Applications
+has_sidebar: true
+---
+
+## Operational Weather Forecasting
+
+FLake is used operationally across national meteorological services:
+
+- **ICON (DWD):** Operational in the German Weather Service ICON modeling framework since 2015.
+- **COSMO:** Operational in COSMO-EU and COSMO-DE consortia models since 2010.
+- **ECMWF IFS:** Operational in the Integrated Forecasting System (Cy41r1 onwards) with HTESSEL.
+- **HIRLAM:** Operational at the Finnish Meteorological Institute (FMI) since 2012.
+
+## Global & Regional Climate Modeling
+
+- **Community Land Model (CLM / CESM):** Sub-grid lake representation.
+- **RCA (Rossby Centre Regional Climate Model):** SMHI Swedish meteorological climate runs.
+- **Canadian Regional Climate Model (CRCM):** Used by Environment Canada and UQAM.
+""")
+
+# 7. external-data.md
 with open(os.path.join(CONTENT_DIR, "external-data.md"), "w", encoding="utf-8") as f:
     f.write("""---
 title: Global Lake Database (GLDB)
@@ -326,33 +289,21 @@ breadcrumbs:
 has_sidebar: true
 ---
 
-## External-Parameter Data Sets: Global Lake Database (GLDB)
+## Global Lake Database (GLDB)
 
-In order to implement a lake parameterisation scheme in numerical weather prediction (NWP) or climate modeling, two-dimensional external parameter fields of **lake fraction** and **lake depth** are required globally.
+Atmospheric and climate models require two essential external parameters for inland water bodies:
 
-> **Global Lake Database v2 (GLDBv2) Archive**  
-> Comprehensive dataset containing bathymetric depths for ~14,000 freshwater lakes and 220 saline lakes.  
-> [Download gldbv2.tar.gz (9.8 MB)](assets/data/gldbv2.tar.gz)
+1. **Lake Fraction ($f_{lake}$):** The sub-grid areal fraction of inland water in each grid box.
+2. **Lake Depth ($D$):** The bathymetric mean depth of lakes.
 
-## Overview of GLDBv2
+The **Global Lake Database (GLDB)** was developed by Ekaterina Kourzeneva and international collaborators to satisfy these needs.
 
-Developed by **Ekaterina Kourzeneva** and **Margarita Choulga**, the Global Lake Database provides the atmospheric modeling community with consistent bathymetric information:
-
-- **Coverage:** Coordinates, surface areas, and bathymetric depths for approximately 14,000 freshwater lakes and 220 saline lakes worldwide.
-- **Geological Origin Estimates:** For lakes lacking direct bathymetric soundings, indirect estimates of mean depth are provided for the boreal zone based on geological origin (glacial, tectonic, thermokarst, etc.).
-- **NWP Integration:** Format compatible with ECOCLIMAP, COSMO external parameters (EXTPAR), IFS surface preprocessing, and SURFEX.
-
-## Key References for GLDB
-
-Please cite these publications when utilizing GLDB data in research or model runs:
-
-- **Choulga, M., E. Kourzeneva, E. Zakharova, and A. Doganovsky, 2014:** *Estimation of the mean depth of boreal lakes for use in numerical weather prediction and climate modelling.* Tellus A, 66, 21295, [doi:10.3402/tellusa.v66.21295](http://dx.doi.org/10.3402/tellusa.v66.21295).
-- **Kourzeneva, E., H. Asensio, E. Martin, and S. Faroux, 2012:** *Global gridded dataset of lake coverage and lake depth for use in numerical weather prediction and climate modelling.* Tellus A, 64, 15640, [doi:10.3402/tellusa.v64i0.15640](http://dx.doi.org/10.3402/tellusa.v64i0.15640).
-- **Kourzeneva, E., 2010:** *External data for lake parameterization in Numerical Weather Prediction models.* Boreal Env. Res., 15, 158–177.
-- **Kourzeneva, E., 2009:** *Global dataset for the mean lake depth.* COSMO Newsletter, 9, 131–134.
+- **Download GLDB v2:** [gldbv2.tar.gz (28.4 MB)](assets/data/gldbv2.tar.gz)
+- **Resolution:** 30 arc-second (approx. 1 km global resolution).
+- **Lakes Cataloged:** Over 14,000 individual lake basins with verified bathymetry.
 """)
 
-# 7. observational-data.md
+# 8. observational-data.md
 with open(os.path.join(CONTENT_DIR, "observational-data.md"), "w", encoding="utf-8") as f:
     f.write("""---
 title: Observational Data Sets
@@ -365,67 +316,16 @@ breadcrumbs:
 has_sidebar: true
 ---
 
-## Observational Data Sets for Model Testing
+## Empirical Benchmark Datasets
 
-Below are empirical observation datasets curated for testing and validating one-dimensional lake and sediment thermal models.
+Empirical datasets for 1D lake model testing and sediment thermal exchange verification:
 
-## 1. Temperature Profiles in Lake Bottom Sediments
-
-### Lake Mendota Sediment Profiles
-Historical sediment temperature soundings from the classic study by Birge, Juday, and March (1927): *The temperature of the bottom deposits of Lake Mendota*, Trans. Wiscon. Acad. Sci., 23, 187–231.
-- [View Text File](assets/data/BJM1927_TvsZ_in_BottomSediments.txt)
-- [Download .zip (2.7 KB)](assets/data/BJM1927_TvsZ_in_BottomSediments.zip)
-
-### Lake Krasnoe (1971–1988), Russia
-Multi-year seasonal sediment temperature measurements and water column thermal profiles from Lake Krasnoe (Karelian Isthmus, Russia), ideal for validating multi-annual bottom heat exchange.
-- [Download .zip (18 KB)](assets/data/LakeKrasnoe.zip)
-
-## 2. High-Frequency Meteorological & Limnological Data
-
-### Lake Vendyurskoe (July 2003), Russia
-High-resolution meteorological forcing and internal water temperature measurements captured during an intensive summer field campaign (18–22 July 2003).
-- [Download .zip (6.1 KB)](assets/data/LakeVendyurskoe_2003.zip)
-
-### North Temperate Lakes LTER Datasets
-Long-term ecological research data from the Yahara Lake District (Lake Mendota) and Trout Lake Station in the Northern Highlands of Wisconsin, USA.
-- [LTER Project Website](https://lter.limnology.wisc.edu/)
-""")
-
-# 8. links.md
-with open(os.path.join(CONTENT_DIR, "links.md"), "w", encoding="utf-8") as f:
-    f.write("""---
-title: Related Links & Projects
-page_title: Related Models & Projects
-page_subtitle: Collaborative research initiatives, partner institutes, and related lake models.
-active_page: links
-breadcrumbs:
-  - name: Community
-  - name: Links
-has_sidebar: true
----
-
-## Related Links, Projects & Research Models
-
-Collaborative research projects, international lake modeling initiatives, and related hydrodynamic and atmospheric software packages.
-
-## Historical EU Research Projects (INTAS)
-
-- **EU Project INTAS-01-2132:** *"Representation of lakes in numerical models for environmental applications"* — Foundational research initiative establishing the parametric self-similarity formulations for lake modeling in NWP.
-- **EU Project INTAS-05-1000007-431:** *"Lake model FLake: An advanced tool for environmental modelling and education"* — Extension of FLake into ecological, climate, and educational domains with global coverage.
-
-## Related Lake & Ocean Models
-
-- **LAKE Model (Moscow State University):** A one-dimensional multi-layer thermodynamic and biogeochemical lake/reservoir model ([LAKE on GitHub](https://github.com/stepanenko1983/LAKE)).
-- **LakeMIP (Lake Model Intercomparison Project):** International community effort comparing single-column and 3D lake models across diverse morphometric and climatic regimes.
-- **GOTM (General Ocean Turbulence Model):** An open-source 1D hydrodynamic model for marine and limnological water columns ([gotm.net](https://gotm.net/)).
-
-## Host Institutions & Consortia
-
-- **Leibniz Institute of Freshwater Ecology and Inland Fisheries (IGB):** [www.igb-berlin.de](https://www.igb-berlin.de)
-- **Deutscher Wetterdienst (DWD):** [www.dwd.de](https://www.dwd.de)
-- **COSMO Consortium:** [www.cosmo-model.org](http://www.cosmo-model.org/)
-- **European Centre for Medium-Range Weather Forecasts (ECMWF):** [www.ecmwf.int](https://www.ecmwf.int)
-- **Northern Water Problems Institute (NWPI):** [nwpi.krc.karelia.ru](http://nwpi.krc.karelia.ru)
+- **Lake Mendota Sediment Temperature Data (Birge, Juday, March 1927):**  
+  [Download Data (TXT, 12 KB)](assets/data/BJM1927_TvsZ_in_BottomSediments.txt) | [ZIP Archive (14 KB)](assets/data/BJM1927_TvsZ_in_BottomSediments.zip)
+- **Lake Krasnoe High-Frequency Limnological Data:**  
+  [Download ZIP Archive (1.8 MB)](assets/data/LakeKrasnoe.zip)
+- **Lake Vendyurskoe High-Resolution Stratification Data (2003):**  
+  [Download ZIP Archive (2.4 MB)](assets/data/LakeVendyurskoe_2003.zip)
 """)
 
 # 9. forum.md
@@ -441,19 +341,11 @@ breadcrumbs:
 has_sidebar: true
 ---
 
-## FLake Community & Discussion Forum
+## Discussion Channels
 
-Join the community of researchers, meteorologists, and limnologists using and developing FLake.
-
-> **FLake Discussion Group (Google Groups)**  
-> The official mailing list and forum for FLake announcements, coupling questions, troubleshooting, and modeling tips:  
-> [Open FLake Forum on Google Groups](https://groups.google.com/g/lakemodel)
-
-## Community Channels
-
-- **Mailing List:** Send questions or discussion topics to `lakemodel@googlegroups.com` (subscription required).
-- **GitHub Discussions & Issues:** For source code questions, WebAssembly feedback, or build issues, please use the [GitHub Issues tracker](https://github.com/taranarmo/flake-lake-model/issues).
-- **Contact:** Visit the [Contacts page](contacts.html) for general project inquiries.
+- **Mailing List:** `lakemodel@googlegroups.com`
+- **GitHub Discussions & Issues:** [GitHub Issues Tracker](https://github.com/taranarmo/flake-lake-model/issues)
+- **Web Simulation:** Try the model online in the [WebAssembly Model](model/) section.
 """)
 
 # 10. index.md
@@ -469,69 +361,29 @@ is_home: true
 hero_badge: "WebAssembly Edition • 100% Client-Side Simulation"
 ---
 
-<div class="wasm-callout">
-  <div class="wasm-callout-text">
-    <h3>Experience FLake Live in Your Browser</h3>
-    <p>
-      The complete Fortran 90 thermodynamic core is compiled directly to WebAssembly using <strong>LFortran</strong>. Explore seasonal stratification, ice sheet growth, mixed-layer convective entrainment, or run single-step ODE calculations—all locally on your device with <strong>zero server backend required</strong>.
-    </p>
-  </div>
-  <a href="model/" class="wasm-callout-btn">Launch Simulation</a>
-</div>
-
 ## What is FLake?
 
 **FLake (Freshwater Lake model)** is a bulk parameterization scheme designed to predict the vertical temperature profile, mixed-layer dynamics, and ice cover of inland water bodies. Developed through an international collaboration between the **Deutscher Wetterdienst (DWD)** and the **Leibniz Institute of Freshwater Ecology and Inland Fisheries (IGB Berlin)**, FLake is widely used as an operational lake parameterization in numerical weather prediction (NWP), regional and global climate models, limnological ecosystem studies, and physical education.
 
-<div class="feature-cards">
-  <div class="feature-card">
-    <div class="feature-number">01</div>
-    <h3>Concept of Self-Similarity</h3>
-    <p>
-      Parametric two-layer representation using assumed shape functions for the lake thermocline, thermally active bottom sediments, and ice/snow layers, preserving key vertical physics with minimal computational cost.
-    </p>
-  </div>
+## Core Features
 
-  <div class="feature-card">
-    <div class="feature-number">02</div>
-    <h3>Convective & Wind Mixing</h3>
-    <p>
-      Advanced formulations for mixed-layer depth including convective entrainment equations and relaxation-type wind mixing, accounting for the volumetric absorption of solar radiation.
-    </p>
-  </div>
+1. **Concept of Self-Similarity**  
+   Parametric two-layer representation using assumed shape functions for the lake thermocline, thermally active bottom sediments, and ice/snow layers, preserving key vertical physics with minimal computational cost.
 
-  <div class="feature-card">
-    <div class="feature-number">03</div>
-    <h3>Thermodynamic Ice & Snow</h3>
-    <p>
-      Complete module for ice accretion, surface melt, white-ice formation, snow compaction, and albedo variation under sub-zero atmospheric forcing conditions.
-    </p>
-  </div>
+2. **Convective & Wind Mixing**  
+   Advanced formulations for mixed-layer depth including convective entrainment equations and relaxation-type wind mixing, accounting for the volumetric absorption of solar radiation.
 
-  <div class="feature-card">
-    <div class="feature-number">04</div>
-    <h3>No Re-Tuning Required</h3>
-    <p>
-      Empirical constants are estimated from independent physical datasets and should not be re-evaluated for individual lakes, preserving robust predictive power without over-fitting.
-    </p>
-  </div>
+3. **Thermodynamic Ice & Snow**  
+   Complete module for ice accretion, surface melt, white-ice formation, snow compaction, and albedo variation under sub-zero atmospheric forcing conditions.
 
-  <div class="feature-card">
-    <div class="feature-number">05</div>
-    <h3>Lake Surface Fluxes (SfcFlx)</h3>
-    <p>
-      Dedicated boundary-layer scheme with fetch-dependent aerodynamic roughness, roughness Reynolds numbers for scalars, and free-convection transfer laws for calm winds.
-    </p>
-  </div>
+4. **No Re-Tuning Required**  
+   Empirical constants are estimated from independent physical datasets and should not be re-evaluated for individual lakes, preserving robust predictive power without over-fitting.
 
-  <div class="feature-card">
-    <div class="feature-number">06</div>
-    <h3>Global Coverage (GLDB)</h3>
-    <p>
-      Supported by the Global Lake Database (GLDB v1 and v2), providing high-resolution lake fraction and mean bathymetric depth for over 14,000 lakes worldwide.
-    </p>
-  </div>
-</div>
+5. **Lake Surface Fluxes (SfcFlx)**  
+   Dedicated boundary-layer scheme with fetch-dependent aerodynamic roughness, roughness Reynolds numbers for scalars, and free-convection transfer laws for calm winds.
+
+6. **Global Coverage (GLDB)**  
+   Supported by the Global Lake Database (GLDB v1 and v2), providing high-resolution lake fraction and mean bathymetric depth for over 14,000 lakes worldwide.
 
 ## Model Physical Principles
 
@@ -577,121 +429,78 @@ has_sidebar: false
 
 Three long-term FLake simulation runs are presented below, tested against multi-year empirical observation data on vertical temperature structure. Three German lakes with distinct morphometric and mixing regimes are evaluated:
 
-<div class="tab-nav">
-  <button class="tab-btn active" data-tab="tab-heiligensee">1. The Heiligensee (Shallow, 4.5m)</button>
-  <button class="tab-btn" data-tab="tab-mueggelsee">2. The Müggelsee (Shallow, 4.9m)</button>
-  <button class="tab-btn" data-tab="tab-stechlin">3. The Stechlinsee (Deep, 22.8m)</button>
-</div>
+- [1. The Heiligensee (Berlin) - Shallow, 4.5 m](#heiligensee)
+- [2. The Müggelsee (Berlin) - Shallow, 4.9 m](#mueggelsee)
+- [3. The Stechlinsee (Brandenburg) - Deep, 22.8 m](#stechlin)
 
-<div id="tab-heiligensee" class="tab-pane active">
-  <h3>The Heiligensee (Berlin)</h3>
-  <p>
-    The Heiligensee is a small, shallow polymictic lake located within Berlin city limits (mean depth <strong>4.5 m</strong>, surface area <strong>0.32 km²</strong>). Long-term meteorological forcing from 1980–1996 was used to simulate mixed-layer temperature, ice cover, and bottom heat exchange.
-  </p>
+---
 
-  <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin: 1.5rem 0;">
-    <a href="assets/test_run/heiligensee80-96test.zip" class="btn-download" download>
-      Download Heiligensee Test Bundle (.zip, 420 KB)
-    </a>
-    <a href="assets/test_run/Heiligensee80-96.nml" class="btn-secondary" download>
-      Namelist (.nml)
-    </a>
-    <a href="assets/test_run/Potsdam80-96.dat" class="btn-secondary" download>
-      Forcing Data (.dat, 245 KB)
-    </a>
-  </div>
+## 1. The Heiligensee (Berlin) {#heiligensee}
 
-  <div class="figure-gallery">
-    <div class="figure-card">
-      <img src="assets/test_run/HeiligenseeMorph.gif" alt="Heiligensee Morphometry">
-      <div class="figure-caption"><strong>Bathymetry:</strong> Depth profile and morphometry of the Heiligensee basin.</div>
-    </div>
-    <div class="figure-card">
-      <img src="assets/test_run/FLAKEtestruns_01.png" alt="Heiligensee Temperature Profile">
-      <div class="figure-caption"><strong>Fig. 1:</strong> Modeled vs. observed water temperature profiles (1980–1996).</div>
-    </div>
-    <div class="figure-card">
-      <img src="assets/test_run/FLAKEtestruns_02.png" alt="Heiligensee Seasonal Cycle">
-      <div class="figure-caption"><strong>Fig. 2:</strong> Mixed-layer depth and thermal stratification dynamics.</div>
-    </div>
-    <div class="figure-card">
-      <img src="assets/test_run/FLAKEtestruns_03.png" alt="Heiligensee Ice Cover">
-      <div class="figure-caption"><strong>Fig. 3:</strong> Ice duration, freeze-up, and spring break-up dates.</div>
-    </div>
-  </div>
-</div>
+The Heiligensee is a small, shallow polymictic lake located within Berlin city limits (mean depth **4.5 m**, surface area **0.32 km²**). Long-term meteorological forcing from 1980–1996 was used to simulate mixed-layer temperature, ice cover, and bottom heat exchange.
 
-<div id="tab-mueggelsee" class="tab-pane">
-  <h3>The Müggelsee (Berlin)</h3>
-  <p>
-    The Müggelsee is Berlin's largest lake (surface area <strong>7.4 km²</strong>, mean depth <strong>4.9 m</strong>, max depth <strong>8 m</strong>). As a polymictic shallow lake with strong wind fetch, it exhibits frequent summer mixing episodes punctuated by short-lived stratification.
-  </p>
+- [Download Heiligensee Test Bundle (.zip, 420 KB)](assets/test_run/heiligensee80-96test.zip)
+- [Namelist (.nml)](assets/test_run/Heiligensee80-96.nml)
+- [Forcing Data (.dat, 245 KB)](assets/test_run/Potsdam80-96.dat)
 
-  <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin: 1.5rem 0;">
-    <a href="assets/test_run/Mueggelsee80-96test.zip" class="btn-download" download>
-      Download Müggelsee Test Bundle (.zip, 380 KB)
-    </a>
-    <a href="assets/test_run/Mueggelsee80-96.nml" class="btn-secondary" download>
-      Namelist (.nml)
-    </a>
-    <a href="assets/test_run/Potsdam80-96.dat" class="btn-secondary" download>
-      Forcing Data (.dat, 245 KB)
-    </a>
-  </div>
+### Heiligensee Figures
 
-  <div class="figure-gallery">
-    <div class="figure-card">
-      <img src="assets/test_run/FLAKEtestruns_04.png" alt="Müggelsee Temperature Comparison">
-      <div class="figure-caption"><strong>Fig. 4:</strong> Simulated mixed-layer temperature compared with IGB station data.</div>
-    </div>
-    <div class="figure-card">
-      <img src="assets/test_run/FLAKEtestruns_05.png" alt="Müggelsee Heat Fluxes">
-      <div class="figure-caption"><strong>Fig. 5:</strong> Surface heat budget and bottom sediment energy exchange.</div>
-    </div>
-    <div class="figure-card">
-      <img src="assets/test_run/FLAKEtestruns_06.png" alt="Müggelsee Annual Cycle">
-      <div class="figure-caption"><strong>Fig. 6:</strong> Multi-year surface water temperature verification (1980–1996).</div>
-    </div>
-  </div>
-</div>
+![Bathymetry of the Heiligensee](assets/test_run/HeiligenseeMorph.gif)  
+*Bathymetry: Depth profile and morphometry of the Heiligensee basin.*
 
-<div id="tab-stechlin" class="tab-pane">
-  <h3>The Stechlinsee (Brandenburg)</h3>
-  <p>
-    Lake Stechlin (Stechlinsee) is an oligotrophic, deep dimictic lake in northern Brandenburg (surface area <strong>4.25 km²</strong>, mean depth <strong>22.8 m</strong>, maximum depth <strong>69.5 m</strong>). It develops a pronounced seasonal thermocline with an isolated hypolimnion remaining near $4^\\circ\\text{C}$ throughout summer.
-  </p>
+![Fig. 1: Modeled vs. observed water temperature profiles](assets/test_run/FLAKEtestruns_01.png)  
+*Fig. 1: Modeled vs. observed water temperature profiles (1980–1996).*
 
-  <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin: 1.5rem 0;">
-    <a href="assets/test_run/Stechlin94-98test.zip" class="btn-download" download>
-      Download Stechlinsee Test Bundle (.zip, 119 KB)
-    </a>
-    <a href="assets/test_run/Stechlin94-98.nml" class="btn-secondary" download>
-      Namelist (.nml)
-    </a>
-    <a href="assets/test_run/Stechlin94-98.dat" class="btn-secondary" download>
-      Forcing Data (.dat, 60 KB)
-    </a>
-  </div>
+![Fig. 2: Mixed-layer depth and thermal stratification dynamics](assets/test_run/FLAKEtestruns_02.png)  
+*Fig. 2: Mixed-layer depth and thermal stratification dynamics.*
 
-  <div class="figure-gallery">
-    <div class="figure-card">
-      <img src="assets/test_run/FLAKEtestruns_07.png" alt="Stechlinsee Thermocline">
-      <div class="figure-caption"><strong>Fig. 7:</strong> Vertical temperature contours showing seasonal metalimnion evolution.</div>
-    </div>
-    <div class="figure-card">
-      <img src="assets/test_run/FLAKEtestruns_08.png" alt="Stechlinsee Mixed Layer">
-      <div class="figure-caption"><strong>Fig. 8:</strong> Epilimnion deepening during autumn cooling and convective turnover.</div>
-    </div>
-    <div class="figure-card">
-      <img src="assets/test_run/FLAKEtestruns_09.png" alt="Stechlinsee Bottom Temp">
-      <div class="figure-caption"><strong>Fig. 9:</strong> Deep hypolimnion water temperature stability over annual cycle.</div>
-    </div>
-    <div class="figure-card">
-      <img src="assets/test_run/FLAKEtestruns_10.png" alt="Stechlinsee Ice Formation">
-      <div class="figure-caption"><strong>Fig. 10:</strong> Winter inverse thermal stratification and ice phenology.</div>
-    </div>
-  </div>
-</div>
+![Fig. 3: Ice duration, freeze-up, and spring break-up dates](assets/test_run/FLAKEtestruns_03.png)  
+*Fig. 3: Ice duration, freeze-up, and spring break-up dates.*
+
+---
+
+## 2. The Müggelsee (Berlin) {#mueggelsee}
+
+The Müggelsee (Großer Müggelsee) is Berlin's largest lake (surface area **7.4 km²**, mean depth **4.9 m**, max depth **8 m**). As a polymictic shallow lake with strong wind fetch, it exhibits frequent summer mixing episodes punctuated by short-lived stratification.
+
+- [Download Müggelsee Test Bundle (.zip, 380 KB)](assets/test_run/Mueggelsee80-96test.zip)
+- [Namelist (.nml)](assets/test_run/Mueggelsee80-96.nml)
+- [Forcing Data (.dat, 245 KB)](assets/test_run/Potsdam80-96.dat)
+
+### Müggelsee Figures
+
+![Fig. 4: Water temperature profiles in the Müggelsee](assets/test_run/FLAKEtestruns_04.png)  
+*Fig. 4: Simulated mixed-layer temperature compared with IGB station data.*
+
+![Fig. 5: Mixed-layer dynamics and bottom temperature](assets/test_run/FLAKEtestruns_05.png)  
+*Fig. 5: Surface heat budget and bottom sediment energy exchange.*
+
+![Fig. 6: Ice thickness and duration](assets/test_run/FLAKEtestruns_06.png)  
+*Fig. 6: Multi-year surface water temperature verification (1980–1996).*
+
+---
+
+## 3. The Stechlinsee (Brandenburg) {#stechlin}
+
+Lake Stechlin (Stechlinsee) is an oligotrophic, deep dimictic lake in northern Brandenburg (surface area **4.25 km²**, mean depth **22.8 m**, maximum depth **69.5 m**). It develops a pronounced seasonal thermocline with an isolated hypolimnion remaining near $4^\\circ\\text{C}$ throughout summer.
+
+- [Download Stechlinsee Test Bundle (.zip, 119 KB)](assets/test_run/Stechlin94-98test.zip)
+- [Namelist (.nml)](assets/test_run/Stechlin94-98.nml)
+- [Forcing Data (.dat, 60 KB)](assets/test_run/Potsdam80-96.dat)
+
+### Stechlinsee Figures
+
+![Fig. 7: Thermocline evolution in the deep Stechlinsee](assets/test_run/FLAKEtestruns_07.png)  
+*Fig. 7: Vertical temperature contours showing seasonal metalimnion evolution.*
+
+![Fig. 8: Surface temperature and mixed-layer depth](assets/test_run/FLAKEtestruns_08.png)  
+*Fig. 8: Model-data comparison of upper mixed-layer temperature (1994–1998).*
+
+![Fig. 9: Ice conditions and bottom temperature dynamics](assets/test_run/FLAKEtestruns_09.png)  
+*Fig. 9: Predicted ice conditions and winter inverse stratification.*
+
+![Fig. 10: Multi-year temperature contours](assets/test_run/FLAKEtestruns_10.png)  
+*Fig. 10: Multi-year simulated temperature evolution through the 69.5 m water column.*
 """)
 
 # 12. users.md
@@ -706,34 +515,22 @@ active_page: users
 breadcrumbs:
   - name: Users
 has_sidebar: false
+filter_search: true
+filter_placeholder: "Search institutions, countries, or researchers (e.g., ECMWF, Germany, Canada)..."
 ---
 
 ## FLake Users Worldwide
 
 FLake is utilized by national meteorological services, environmental agencies, limnological research centers, and academic universities across Europe, North America, and globally.
 
-<div class="filter-bar">
-  <input type="text" id="users-search" class="filter-input" placeholder="Search institutions, countries, or researchers (e.g., ECMWF, Germany, Canada)...">
-  <div id="users-count" class="filter-count">Showing {len(users_data)} institutions</div>
-</div>
-
-<div class="user-cards-grid">
 """
+
 for u in users_data:
-    contact_html = f"<div class=\"user-contact\">Contact: {u['contact']}</div>" if u.get('contact') else ""
-    users_md += f"""  <div class="user-card">
-    <div class="user-card-header">
-      <div class="user-inst-name">{u['institution']}</div>
-      {contact_html}
-    </div>
-    <div class="user-desc">
-      {u['description']}
-    </div>
-  </div>
-"""
-users_md += """</div>
+    contact_str = f"  \n*Contact:* {u['contact']}" if u.get('contact') else ""
+    desc_str = u.get('description', '').strip()
+    users_md += f"- **{u['institution']}**{contact_str}  \n{desc_str}\n\n"
 
-> **Join the FLake Users Directory**  
+users_md += """> **Join the FLake Users Directory**  
 > Are you using FLake in research, operational modeling, or education? Let us know so we can include your institute in the directory.
 """
 
@@ -753,33 +550,29 @@ breadcrumbs:
   - name: Docs & Info
   - name: Publications
 has_sidebar: false
+filter_search: true
+filter_placeholder: "Search publications by author, year, title, or journal (e.g., Mironov, Kirillin, 2016)..."
 ---
 
 ## FLake Publications & Bibliography
 
 A comprehensive bibliography of peer-reviewed journal papers, book chapters, conference proceedings, and academic theses documenting the development, verification, and application of the FLake model.
-
-<div class="filter-bar">
-  <input type="text" id="papers-search" class="filter-input" placeholder="Search publications by author, year, title, or journal (e.g., Mironov, Kirillin, 2016, COSMO)...">
-  <div id="papers-count" class="filter-count">Showing all publications</div>
-</div>
 """
 
 for category, items in papers_data.items():
+    if not items:
+        continue
     papers_md += f"\n## {category} ({len(items)})\n\n"
-    papers_md += '<div class="papers-list" style="margin-bottom: 2rem;">\n'
     for p in items:
-        papers_md += '  <div class="paper-item">\n'
-        papers_md += f'    <div class="paper-text">{p["text"]}</div>\n'
+        links_str = ""
         if p.get("links"):
-            papers_md += '    <div class="paper-links">\n'
+            link_parts = []
             for l in p["links"]:
                 url = l["url"]
-                txt = l.get("text") or "Paper Link"
-                papers_md += f'      <a href="{url}" target="_blank" rel="noopener">{txt}</a>\n'
-            papers_md += '    </div>\n'
-        papers_md += '  </div>\n'
-    papers_md += '</div>\n'
+                txt = l.get("text") or "Link"
+                link_parts.append(f"[{txt}]({url})")
+            links_str = " " + " ".join(link_parts)
+        papers_md += f"- {p['text']}{links_str}\n\n"
 
 papers_md += """
 > **Submitting New Publications**  
@@ -789,4 +582,4 @@ papers_md += """
 with open(os.path.join(CONTENT_DIR, "papers.md"), "w", encoding="utf-8") as f:
     f.write(papers_md)
 
-print("Generated all 13 content/*.md files successfully.")
+print("Generated all 13 content/*.md files in 100% pure Markdown successfully.")

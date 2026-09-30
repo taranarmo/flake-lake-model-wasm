@@ -36,10 +36,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 3. Publications Instant Search Filter
   const papersFilterInput = document.getElementById('papers-search');
-  const paperItems = document.querySelectorAll('.paper-item');
+  const paperItems = document.querySelectorAll('.paper-item, .page-papers .content-article ul li');
   const paperCount = document.getElementById('papers-count');
 
   if (papersFilterInput && paperItems.length > 0) {
+    if (paperCount) {
+      paperCount.textContent = `Showing all ${paperItems.length} publications`;
+    }
     papersFilterInput.addEventListener('input', (e) => {
       const query = e.target.value.toLowerCase().trim();
       let visibleCount = 0;
@@ -62,10 +65,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 4. Users Instant Search Filter
   const usersFilterInput = document.getElementById('users-search');
-  const userCards = document.querySelectorAll('.user-card');
+  const userCards = document.querySelectorAll('.user-card, .page-users .content-article ul li');
   const userCount = document.getElementById('users-count');
 
   if (usersFilterInput && userCards.length > 0) {
+    if (userCount) {
+      userCount.textContent = `Showing all ${userCards.length} institutions`;
+    }
     usersFilterInput.addEventListener('input', (e) => {
       const query = e.target.value.toLowerCase().trim();
       let visibleCount = 0;

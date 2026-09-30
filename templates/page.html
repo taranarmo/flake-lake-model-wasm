@@ -1,5 +1,24 @@
 {% extends "base.html" %}
 
 {% block content %}
-{{ content_html | safe }}
+  {% if is_home or show_wasm_callout %}
+  <div class="wasm-callout">
+    <div class="wasm-callout-text">
+      <h3>Experience FLake Live in Your Browser</h3>
+      <p>
+        The complete Fortran 90 thermodynamic core is compiled directly to WebAssembly using <strong>LFortran</strong>. Explore seasonal stratification, ice sheet growth, mixed-layer convective entrainment, or run single-step ODE calculations—all locally on your device with <strong>zero server backend required</strong>.
+      </p>
+    </div>
+    <a href="{{ base_url }}model/" class="wasm-callout-btn">Launch Simulation</a>
+  </div>
+  {% endif %}
+
+  {% if filter_search %}
+  <div class="filter-bar">
+    <input type="text" id="{{ filter_id or (active_page ~ '-search') }}" class="filter-input" placeholder="{{ filter_placeholder or 'Search...' }}">
+    <div id="{{ filter_count_id or (active_page ~ '-count') }}" class="filter-count"></div>
+  </div>
+  {% endif %}
+
+  {{ content_html | safe }}
 {% endblock %}

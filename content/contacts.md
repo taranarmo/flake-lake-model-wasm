@@ -10,6 +10,4 @@ has_sidebar: true
 
 ## Contact Information
 
-<div style="min-height: 200px;">
-  <!-- Contacts page intentionally empty -->
-</div>
+Contact information is currently being updated. For model questions and community discussions, visit the [Discussion Forum](forum.html) or browse the [Documentation](docs.html).

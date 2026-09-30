@@ -18,6 +18,7 @@ import os
 import re
 import json
 import shutil
+import unicodedata
 import yaml
 import mistune
 from jinja2 import Environment, FileSystemLoader
@@ -77,6 +78,33 @@ def ensure_favicon():
     os.makedirs(site_model_dir, exist_ok=True)
     shutil.copy2(site_favicon, site_model_favicon)
 
+def slugify(text):
+    text = re.sub(r"<[^>]+>", "", text)
+    text = text.replace("&amp;", "and").replace("&", "and")
+    text = text.replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss")
+    text = text.replace("Ä", "Ae").replace("Ö", "Oe").replace("Ü", "Ue")
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    text = re.sub(r"[^\w\s-]", "", text.lower()).strip()
+    text = re.sub(r"[-\s_]+", "-", text)
+    return text
+
+class CustomHTMLRenderer(mistune.HTMLRenderer):
+    def heading(self, text, level, **attrs):
+        custom_id = None
+        m = re.search(r"\s*\{#([a-zA-Z0-9_-]+)\}\s*$", text)
+        if m:
+            custom_id = m.group(1)
+            text = text[:m.start()].strip()
+
+        slug = slugify(text)
+        primary_id = custom_id or slug
+
+        alias_html = ""
+        if custom_id and slug != custom_id:
+            alias_html = f"<span id=\"{slug}\"></span>"
+
+        return f"{alias_html}<h{level} id=\"{primary_id}\">{text}</h{level}>\n"
+
 def main():
     print("=== Building FLake Website into _site/ ===")
 
@@ -91,9 +119,11 @@ def main():
         autoescape=True
     )
 
-    # 3. Setup Mistune Markdown Parser with tables & URL autolinking
-    # Note: escape=False ensures inline HTML blocks/classes are preserved as authored
-    md_parser = mistune.create_markdown(escape=False, plugins=['table', 'url'])
+    # 3. Setup Mistune Markdown Parser with custom renderer, tables & URL autolinking
+    md_parser = mistune.create_markdown(
+        renderer=CustomHTMLRenderer(escape=False),
+        plugins=['table', 'url']
+    )
 
     # 4. Load Global Site Data
     news_data = load_json("news.json")
@@ -129,6 +159,11 @@ def main():
             "is_home": meta.get("is_home", False),
             "hero_badge": meta.get("hero_badge", None),
             "show_hero_actions": meta.get("show_hero_actions", False),
+            "show_wasm_callout": meta.get("show_wasm_callout", False),
+            "filter_search": meta.get("filter_search", False),
+            "filter_id": meta.get("filter_id", None),
+            "filter_placeholder": meta.get("filter_placeholder", None),
+            "filter_count_id": meta.get("filter_count_id", None),
             "news": news_data,
             "content_html": rendered_html
         }
