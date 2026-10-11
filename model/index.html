@@ -264,7 +264,7 @@
                   <option value="mueggelsee">Müggelsee (Berlin) - Polymictic (4.9m)</option>
                   <option value="stechlin">Stechlinsee (Brandenburg) - Dimictic (22.8m)</option>
                   <option value="geneva">Lake Geneva / Léman - Monomictic (40.0m)</option>
-                  <option value="baikal">Lake Baikal (Siberia) - Cold / Ice (50.0m)</option>
+                  <option value="baikal">Lake Baikal (Siberia) - Cold / Ice (744m)</option>
                 </select>
               </div>
 
@@ -312,7 +312,7 @@
                   <option value="geneva">Lake Geneva / Léman (46.45°N, 6.60°E, 40m)</option>
                   <option value="constance">Lake Constance / Bodensee (47.63°N, 9.38°E, 45m)</option>
                   <option value="superior">Lake Superior (47.70°N, -87.50°E, 50m)</option>
-                  <option value="baikal">Lake Baikal (53.50°N, 108.20°E, 50m)</option>
+                  <option value="baikal">Lake Baikal (53.50°N, 108.20°E, 744m)</option>
                   <option value="tahoe">Lake Tahoe (39.09°N, -120.03°E, 50m)</option>
                   <option value="victoria">Lake Victoria (-1.00°N, 33.00°E, 40m)</option>
                 </select>
@@ -441,9 +441,13 @@
             <div class="control-group">
               <div class="control-label-row">
                 <span class="control-label">Lake Depth (D)</span>
-                <span id="val-depth" class="control-val-display">12.0 m</span>
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <input type="number" id="input-depth" class="api-input" min="0.5" max="2500" step="0.5" value="12.0" style="width: 78px; padding: 2px 6px; font-size: 0.82rem; text-align: right;" title="Enter custom lake depth in meters">
+                  <span id="val-depth" class="control-val-display" style="display: none;">12.0 m</span>
+                  <span style="font-size: 0.78rem; color: var(--text-muted); font-family: var(--font-mono);">m</span>
+                </div>
               </div>
-              <input type="range" id="slider-depth" class="slider-input" min="3" max="35" step="1" value="12">
+              <input type="range" id="slider-depth" class="slider-input" min="1" max="100" step="0.5" value="12" title="Slide to adjust lake depth">
             </div>
 
             <!-- Water Clarity / Optical Extinction -->

@@ -116,11 +116,11 @@
       regime: 'Cold Dimictic / Ice-Covered (Rift Lake)',
       regimeShort: 'Cold / Ice',
       regimeColor: '#0891b2',
-      depth: 50.0,
+      depth: 744.0,
       fetch: 25000,
       clarity: 0.2,
       lat: 53.5,
-      description: "World's deepest freshwater rift lake, featuring prolonged seasonal ice cover and pronounced winter inverse stratification.",
+      description: "World's deepest freshwater rift lake (mean depth 744m, max depth 1642m). Depth is fully customizable.",
       source: 'ERA5 Reanalysis (2024)',
       file: 'baikal.json'
     }
@@ -133,7 +133,7 @@
     geneva: { name: 'Lake Geneva / Léman', lat: 46.45, lon: 6.60, depth: 40.0, clarity: 0.4 },
     constance: { name: 'Lake Constance / Bodensee', lat: 47.63, lon: 9.38, depth: 45.0, clarity: 0.5 },
     superior: { name: 'Lake Superior', lat: 47.70, lon: -87.50, depth: 50.0, clarity: 0.25 },
-    baikal: { name: 'Lake Baikal', lat: 53.50, lon: 108.20, depth: 50.0, clarity: 0.2 },
+    baikal: { name: 'Lake Baikal', lat: 53.50, lon: 108.20, depth: 744.0, clarity: 0.2 },
     tahoe: { name: 'Lake Tahoe', lat: 39.09, lon: -120.03, depth: 50.0, clarity: 0.15 },
     victoria: { name: 'Lake Victoria', lat: -1.00, lon: 33.00, depth: 40.0, clarity: 1.0 }
   };
@@ -247,6 +247,7 @@
     // Lake geometry
     sliderDepth: document.getElementById('slider-depth'),
     valDepth: document.getElementById('val-depth'),
+    inputDepth: document.getElementById('input-depth'),
     selectClarity: document.getElementById('select-clarity'),
 
     // Telemetry
@@ -465,12 +466,8 @@
       showCuratedStatus(`Running FLake WebAssembly simulation across ${dataset.steps.length} timesteps...`, "");
 
       // Sync lake parameters to sidebar
-      state.lakeDepth = lake.depth;
       state.waterClarity = lake.clarity;
-      if (UI.sliderDepth) {
-        UI.sliderDepth.value = lake.depth;
-        UI.valDepth.textContent = `${lake.depth.toFixed(1)} m`;
-      }
+      updateLakeDepth(lake.depth);
       if (UI.selectClarity) {
         UI.selectClarity.value = lake.clarity.toString();
       }
@@ -1100,6 +1097,38 @@
     UI.valSolar.textContent = `${Math.round(forcing.solar)} W/m²`;
   }
 
+  function getDepthTickInterval(D) {
+    if (D <= 8) return 1;
+    if (D <= 15) return 2;
+    if (D <= 35) return 5;
+    if (D <= 80) return 10;
+    if (D <= 200) return 25;
+    if (D <= 500) return 50;
+    if (D <= 1000) return 100;
+    return 200;
+  }
+
+  function updateLakeDepth(depth, updateInput = true, updateSlider = true) {
+    const d = Math.max(0.5, Math.min(2500, depth));
+    state.lakeDepth = d;
+    if (updateInput && UI.inputDepth) {
+      UI.inputDepth.value = d.toFixed(1);
+    }
+    if (UI.valDepth) {
+      UI.valDepth.textContent = `${d.toFixed(1)} m`;
+    }
+    if (updateSlider && UI.sliderDepth) {
+      if (d > 100) {
+        UI.sliderDepth.max = Math.ceil(d * 1.25);
+      } else {
+        UI.sliderDepth.max = 100;
+      }
+      UI.sliderDepth.value = d;
+    }
+    engine.setLakeParameters({ depth: d });
+    renderAll();
+  }
+
   /**
    * Render Canvas 1: Lake Cross-Section Column
    */
@@ -1130,35 +1159,45 @@
     ctxLake.fillStyle = skyGrad;
     ctxLake.fillRect(waterLeft, 0, waterWidth, skyHeight);
 
-    const celestialX = waterLeft + (waterWidth * ((engine.hourOfDay + 6) % 24)) / 24;
-    const celestialY = 28 + 12 * Math.sin(((engine.hourOfDay % 12) / 12) * Math.PI);
+    // Celestial position (sun/moon travels in upper sky, never overlapping lake surface or ice)
+    let celestialX, celestialY;
+    if (isDay) {
+      const dayFrac = (engine.hourOfDay - 6) / 12; // 0 to 1
+      celestialX = waterLeft + 25 + dayFrac * (waterWidth - 50);
+      celestialY = 16 + (1 - Math.sin(dayFrac * Math.PI)) * 8; // 16 at noon, 24 near horizon
+    } else {
+      const nightFrac = ((engine.hourOfDay + 6) % 24) / 12;
+      celestialX = waterLeft + 25 + (nightFrac % 1) * (waterWidth - 50);
+      celestialY = 18;
+    }
+
     ctxLake.save();
     if (isDay) {
-      const sunGlow = ctxLake.createRadialGradient(celestialX, celestialY, 2, celestialX, celestialY, 20);
+      const sunGlow = ctxLake.createRadialGradient(celestialX, celestialY, 2, celestialX, celestialY, 14);
       sunGlow.addColorStop(0, 'rgba(255, 235, 120, 1.0)');
       sunGlow.addColorStop(0.5, 'rgba(255, 180, 50, 0.4)');
       sunGlow.addColorStop(1, 'rgba(255, 160, 0, 0)');
       ctxLake.fillStyle = sunGlow;
       ctxLake.beginPath();
-      ctxLake.arc(celestialX, celestialY, 20, 0, Math.PI * 2);
+      ctxLake.arc(celestialX, celestialY, 14, 0, Math.PI * 2);
       ctxLake.fill();
 
       ctxLake.fillStyle = '#fffae0';
       ctxLake.beginPath();
-      ctxLake.arc(celestialX, celestialY, 7, 0, Math.PI * 2);
+      ctxLake.arc(celestialX, celestialY, 6, 0, Math.PI * 2);
       ctxLake.fill();
     } else {
       ctxLake.fillStyle = '#e2e8f0';
       ctxLake.beginPath();
-      ctxLake.arc(celestialX, celestialY, 6, 0, Math.PI * 2);
+      ctxLake.arc(celestialX, celestialY, 5, 0, Math.PI * 2);
       ctxLake.fill();
     }
     ctxLake.restore();
 
     const windSpeed = state.baseWind;
-    ctxLake.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctxLake.fillStyle = 'rgba(255, 255, 255, 0.65)';
     ctxLake.font = '11px ' + getComputedStyle(document.body).getPropertyValue('--font-mono');
-    ctxLake.fillText(`Wind: ${windSpeed.toFixed(1)} m/s →`, waterLeft + 12, skyHeight - 12);
+    ctxLake.fillText(`Wind: ${windSpeed.toFixed(1)} m/s →`, waterLeft + 12, 18);
 
     const bedGrad = ctxLake.createLinearGradient(0, waterBottom, 0, height);
     bedGrad.addColorStop(0, '#2d1f14');
@@ -1172,6 +1211,7 @@
 
     const depthToY = (z) => waterTop + (z / D) * waterHeight;
     const mixedLayerY = depthToY(Math.min(D, hML));
+    const pxPerMeter = waterHeight / D;
 
     function tempToColor(t) {
       if (t <= 0) return [40, 75, 120];
@@ -1224,31 +1264,60 @@
       ctxLake.restore();
     }
 
+    // Ice cover rendering
     if (hice > 0.0005) {
-      const iceThicknessPx = Math.max(4, Math.min(45, hice * 250));
-      const iceTop = waterTop - iceThicknessPx;
+      // True physical scale on depth ruler (px per meter)
+      const rulerIcePx = hice * pxPerMeter;
+      // Minimum visual thickness of 3px so thin ice is discernible, but capped to match depth ruler
+      const iceThicknessPx = Math.max(3, Math.min(waterHeight * 0.35, rulerIcePx));
+      // In physics, ice floats with ~90% submerged below z=0 and ~10% freeboard above
+      const freeboardPx = Math.min(2, Math.max(1, Math.round(iceThicknessPx * 0.1)));
+      const iceTop = waterTop - freeboardPx;
 
-      const iceGrad = ctxLake.createLinearGradient(0, iceTop, 0, waterTop);
-      iceGrad.addColorStop(0, 'rgba(200, 240, 255, 0.95)');
-      iceGrad.addColorStop(1, 'rgba(130, 210, 240, 0.85)');
+      const iceGrad = ctxLake.createLinearGradient(0, iceTop, 0, iceTop + iceThicknessPx);
+      iceGrad.addColorStop(0, 'rgba(215, 245, 255, 0.95)');
+      iceGrad.addColorStop(1, 'rgba(140, 215, 245, 0.85)');
       ctxLake.fillStyle = iceGrad;
       ctxLake.fillRect(waterLeft, iceTop, waterWidth, iceThicknessPx);
 
       ctxLake.strokeStyle = '#a5f3fc';
-      ctxLake.lineWidth = 1.5;
+      ctxLake.lineWidth = 1.2;
       ctxLake.strokeRect(waterLeft, iceTop, waterWidth, iceThicknessPx);
 
-      ctxLake.fillStyle = '#083344';
-      ctxLake.font = 'bold 11px sans-serif';
-      ctxLake.fillText(`ICE: ${(hice * 100).toFixed(1)} cm`, waterLeft + 16, iceTop + iceThicknessPx / 2 + 4);
-
+      // Snow layer on top of ice
+      let snowPx = 0;
       if (hsnow > 0.0005) {
-        const snowPx = Math.max(3, Math.min(25, hsnow * 200));
+        snowPx = Math.max(2, Math.min(8, hsnow * pxPerMeter * 2));
         ctxLake.fillStyle = '#ffffff';
         ctxLake.fillRect(waterLeft, iceTop - snowPx, waterWidth, snowPx);
         ctxLake.strokeStyle = 'rgba(226, 232, 240, 0.8)';
         ctxLake.strokeRect(waterLeft, iceTop - snowPx, waterWidth, snowPx);
       }
+
+      // Elegant ice telemetry badge in the sky above the ice (right-aligned, below sun path)
+      ctxLake.save();
+      const iceText = `Ice: ${(hice * 100).toFixed(1)} cm${hsnow > 0.001 ? ` | Snow: ${(hsnow * 100).toFixed(1)} cm` : ''}`;
+      ctxLake.font = 'bold 10px ' + getComputedStyle(document.body).getPropertyValue('--font-mono');
+      const badgeW = ctxLake.measureText(iceText).width + 12;
+      const badgeH = 17;
+      const badgeX = waterLeft + waterWidth - badgeW - 10;
+      const badgeY = Math.max(28, waterTop - badgeH - (snowPx > 0 ? snowPx + 4 : 4));
+
+      ctxLake.fillStyle = 'rgba(8, 51, 68, 0.85)';
+      ctxLake.strokeStyle = '#67e8f9';
+      ctxLake.lineWidth = 1;
+      ctxLake.beginPath();
+      if (ctxLake.roundRect) {
+        ctxLake.roundRect(badgeX, badgeY, badgeW, badgeH, 3);
+      } else {
+        ctxLake.rect(badgeX, badgeY, badgeW, badgeH);
+      }
+      ctxLake.fill();
+      ctxLake.stroke();
+
+      ctxLake.fillStyle = '#a5f3fc';
+      ctxLake.fillText(iceText, badgeX + 6, badgeY + 12);
+      ctxLake.restore();
     } else {
       ctxLake.strokeStyle = 'rgba(255, 255, 255, 0.5)';
       ctxLake.lineWidth = 1.5;
@@ -1262,6 +1331,7 @@
       ctxLake.stroke();
     }
 
+    // Ruler on the left with dynamically spaced ticks
     ctxLake.fillStyle = '#090d16';
     ctxLake.fillRect(0, 0, rulerWidth, height);
     ctxLake.strokeStyle = 'rgba(255, 255, 255, 0.15)';
@@ -1274,7 +1344,7 @@
     ctxLake.font = '10px ' + getComputedStyle(document.body).getPropertyValue('--font-mono');
     ctxLake.textAlign = 'right';
 
-    const tickInterval = D <= 10 ? 1 : D <= 25 ? 2 : 5;
+    const tickInterval = getDepthTickInterval(D);
     for (let z = 0; z <= D; z += tickInterval) {
       const y = depthToY(z);
       ctxLake.beginPath();
@@ -1282,6 +1352,14 @@
       ctxLake.lineTo(rulerWidth, y);
       ctxLake.stroke();
       ctxLake.fillText(`${z}m`, rulerWidth - 8, y + 3);
+    }
+    if (D % tickInterval !== 0 && (D % tickInterval) > (tickInterval * 0.35)) {
+      const y = depthToY(D);
+      ctxLake.beginPath();
+      ctxLake.moveTo(rulerWidth - 6, y);
+      ctxLake.lineTo(rulerWidth, y);
+      ctxLake.stroke();
+      ctxLake.fillText(`${D.toFixed(0)}m`, rulerWidth - 8, y + 3);
     }
     ctxLake.textAlign = 'left';
   }
@@ -1340,7 +1418,7 @@
     ctxProfile.setLineDash([]);
 
     ctxProfile.textAlign = 'right';
-    const depthInterval = D <= 10 ? 2 : D <= 25 ? 5 : 10;
+    const depthInterval = getDepthTickInterval(D);
     for (let z = 0; z <= D; z += depthInterval) {
       const y = depthToY(z);
       ctxProfile.strokeStyle = 'rgba(255, 255, 255, 0.08)';
@@ -1351,6 +1429,16 @@
 
       ctxProfile.fillStyle = '#6b7280';
       ctxProfile.fillText(`${z}m`, padLeft - 8, y + 4);
+    }
+    if (D % depthInterval !== 0 && (D % depthInterval) > (depthInterval * 0.35)) {
+      const y = depthToY(D);
+      ctxProfile.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+      ctxProfile.beginPath();
+      ctxProfile.moveTo(padLeft, y);
+      ctxProfile.lineTo(padLeft + plotW, y);
+      ctxProfile.stroke();
+      ctxProfile.fillStyle = '#6b7280';
+      ctxProfile.fillText(`${D.toFixed(0)}m`, padLeft - 8, y + 4);
     }
 
     ctxProfile.strokeStyle = 'rgba(255, 255, 255, 0.15)';
@@ -1654,7 +1742,7 @@
     ctxCalcProfile.setLineDash([]);
 
     ctxCalcProfile.textAlign = 'right';
-    const depthInterval = D <= 10 ? 2 : D <= 25 ? 5 : 10;
+    const depthInterval = getDepthTickInterval(D);
     for (let z = 0; z <= D; z += depthInterval) {
       const y = depthToY(z);
       ctxCalcProfile.strokeStyle = 'rgba(255, 255, 255, 0.06)';
@@ -1665,6 +1753,16 @@
 
       ctxCalcProfile.fillStyle = '#6b7280';
       ctxCalcProfile.fillText(`${z}m`, padLeft - 6, y + 3);
+    }
+    if (D % depthInterval !== 0 && (D % depthInterval) > (depthInterval * 0.35)) {
+      const y = depthToY(D);
+      ctxCalcProfile.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+      ctxCalcProfile.beginPath();
+      ctxCalcProfile.moveTo(padLeft, y);
+      ctxCalcProfile.lineTo(padLeft + plotW, y);
+      ctxCalcProfile.stroke();
+      ctxCalcProfile.fillStyle = '#6b7280';
+      ctxCalcProfile.fillText(`${D.toFixed(0)}m`, padLeft - 6, y + 3);
     }
 
     ctxCalcProfile.strokeStyle = 'rgba(255, 255, 255, 0.15)';
@@ -2252,12 +2350,10 @@
           const info = LAKE_PRESETS[pKey];
           UI.apiLat.value = info.lat;
           UI.apiLon.value = info.lon;
-          state.lakeDepth = info.depth;
           state.waterClarity = info.clarity;
-          UI.sliderDepth.value = info.depth;
-          UI.valDepth.textContent = `${info.depth.toFixed(1)} m`;
-          UI.selectClarity.value = info.clarity.toString();
-          engine.setLakeParameters({ depth: info.depth, extinWater: info.clarity });
+          if (UI.selectClarity) UI.selectClarity.value = info.clarity.toString();
+          engine.setLakeParameters({ extinWater: info.clarity });
+          updateLakeDepth(info.depth);
         }
       });
     }
@@ -2306,12 +2402,31 @@
       state.diurnalCycle = e.target.checked;
     });
 
-    UI.sliderDepth.addEventListener('input', (e) => {
-      const depth = parseFloat(e.target.value);
-      state.lakeDepth = depth;
-      UI.valDepth.textContent = `${depth.toFixed(1)} m`;
-      engine.setLakeParameters({ depth });
-    });
+    if (UI.sliderDepth) {
+      UI.sliderDepth.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        if (!isNaN(val)) {
+          updateLakeDepth(val, true, false);
+        }
+      });
+    }
+
+    if (UI.inputDepth) {
+      UI.inputDepth.addEventListener('change', (e) => {
+        const val = parseFloat(e.target.value);
+        if (!isNaN(val)) {
+          updateLakeDepth(val, true, true);
+        } else {
+          updateLakeDepth(state.lakeDepth, true, true);
+        }
+      });
+      UI.inputDepth.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        if (!isNaN(val) && val >= 0.5 && val <= 2500) {
+          updateLakeDepth(val, false, true);
+        }
+      });
+    }
 
     UI.selectClarity.addEventListener('change', (e) => {
       const extin = parseFloat(e.target.value);
@@ -2405,6 +2520,7 @@
       UI.clockText.textContent = 'FLake WASM Ready';
 
       setupEventListeners();
+      updateLakeDepth(state.lakeDepth);
       updateCuratedLakeCard('heiligensee');
       applyPreset('summer');
 
