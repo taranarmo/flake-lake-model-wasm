@@ -210,6 +210,7 @@
     apiStatusBox: document.getElementById('api-status-box'),
     apiStatusText: document.getElementById('api-status-text'),
     apiPlaybackBox: document.getElementById('api-playback-box'),
+    apiSourcePill: document.getElementById('api-source-pill'),
     apiTimePill: document.getElementById('api-time-pill'),
     apiScrubber: document.getElementById('api-scrubber'),
     statTsfcMin: document.getElementById('stat-tsfc-min'),
@@ -422,9 +423,80 @@
     if (UI.curatedSource) UI.curatedSource.textContent = `Source: ${info.source}`;
   }
 
+  // -------------------------------------------------------------
+  // Offline IndexedDB Weather Cache
+  // -------------------------------------------------------------
+  const WeatherCache = {
+    dbPromise: null,
+
+    getDB() {
+      if (!this.dbPromise) {
+        this.dbPromise = new Promise((resolve) => {
+          if (typeof indexedDB === 'undefined') {
+            resolve(null);
+            return;
+          }
+          try {
+            const req = indexedDB.open('FLakeWeatherCache', 1);
+            req.onupgradeneeded = (e) => {
+              const db = e.target.result;
+              if (!db.objectStoreNames.contains('datasets')) {
+                db.createObjectStore('datasets', { keyPath: 'id' });
+              }
+            };
+            req.onsuccess = (e) => resolve(e.target.result);
+            req.onerror = () => resolve(null);
+          } catch (_) {
+            resolve(null);
+          }
+        });
+      }
+      return this.dbPromise;
+    },
+
+    async get(id) {
+      try {
+        const db = await this.getDB();
+        if (!db) return null;
+        return new Promise((resolve) => {
+          const tx = db.transaction('datasets', 'readonly');
+          const store = tx.objectStore('datasets');
+          const req = store.get(id);
+          req.onsuccess = () => resolve(req.result ? req.result : null);
+          req.onerror = () => resolve(null);
+        });
+      } catch (_) {
+        return null;
+      }
+    },
+
+    async set(id, steps, meta = {}) {
+      try {
+        const db = await this.getDB();
+        if (!db) return false;
+        return new Promise((resolve) => {
+          const tx = db.transaction('datasets', 'readwrite');
+          const store = tx.objectStore('datasets');
+          store.put({
+            id,
+            steps,
+            meta,
+            savedAt: new Date().toISOString()
+          });
+          tx.oncomplete = () => resolve(true);
+          tx.onerror = () => resolve(false);
+        });
+      } catch (_) {
+        return false;
+      }
+    }
+  };
+
   async function fetchCuratedLake(lakeKey) {
     const info = CURATED_BENCHMARKS[lakeKey];
     if (!info) throw new Error("Unknown curated lake: " + lakeKey);
+    const cacheId = `curated:${lakeKey}`;
+
     const candidatePaths = [
       `data/lakes/${info.file}`,
       `assets/data/lakes/${info.file}`,
@@ -437,6 +509,9 @@
         const resp = await fetch(p);
         if (resp.ok) {
           data = await resp.json();
+          if (data && data.steps) {
+            WeatherCache.set(cacheId, data.steps, { name: info.name, timeStepSec: data.timeStepSec });
+          }
           break;
         }
       } catch (e) {
@@ -444,6 +519,11 @@
       }
     }
     if (!data) {
+      // Fallback to offline cache
+      const cached = await WeatherCache.get(cacheId);
+      if (cached && cached.steps && cached.steps.length > 0) {
+        return { steps: cached.steps, timeStepSec: (cached.meta && cached.meta.timeStepSec) || 86400, fromCache: true };
+      }
       throw new Error(lastErr ? lastErr.message : `Failed to load benchmark dataset for ${info.name}`);
     }
     return data;
@@ -520,6 +600,20 @@
       }
       if (UI.apiPlaybackBox) {
         UI.apiPlaybackBox.style.display = 'flex';
+      }
+      if (UI.apiSourcePill) {
+        UI.apiSourcePill.style.display = 'inline-block';
+        if (dataset.fromCache) {
+          UI.apiSourcePill.textContent = 'Offline Cache';
+          UI.apiSourcePill.style.color = '#86efac';
+          UI.apiSourcePill.style.background = 'rgba(34, 197, 94, 0.15)';
+          UI.apiSourcePill.style.borderColor = 'rgba(34, 197, 94, 0.35)';
+        } else {
+          UI.apiSourcePill.textContent = 'Curated Benchmark';
+          UI.apiSourcePill.style.color = '#7dd3fc';
+          UI.apiSourcePill.style.background = 'rgba(14, 165, 233, 0.15)';
+          UI.apiSourcePill.style.borderColor = 'rgba(14, 165, 233, 0.35)';
+        }
       }
 
       showCuratedStatus(`Completed ${dataset.steps.length} timesteps in ${res.elapsedMs.toFixed(1)} ms (${lake.name})`, "success");
@@ -863,6 +957,13 @@
       if (UI.apiPlaybackBox) {
         UI.apiPlaybackBox.style.display = 'flex';
       }
+      if (UI.apiSourcePill) {
+        UI.apiSourcePill.style.display = 'inline-block';
+        UI.apiSourcePill.textContent = 'Custom File';
+        UI.apiSourcePill.style.color = '#c084fc';
+        UI.apiSourcePill.style.background = 'rgba(192, 132, 252, 0.15)';
+        UI.apiSourcePill.style.borderColor = 'rgba(192, 132, 252, 0.35)';
+      }
 
       showCustomStatus(`Simulation complete! Processed ${parsed.rowCount.toLocaleString()} timesteps in ${res.elapsedMs.toFixed(1)} ms.`, "success");
 
@@ -1008,12 +1109,34 @@
       return;
     }
 
+    const cacheId = `api:${lat.toFixed(2)}:${lon.toFixed(2)}:${period}`;
     showApiStatus(`Requesting Open-Meteo weather data for (${lat.toFixed(2)}°, ${lon.toFixed(2)}°)...`, "");
     UI.btnFetchApi.disabled = true;
 
     try {
-      const { steps } = await fetchOpenMeteoSeries(lat, lon, period);
-      showApiStatus(`Received ${steps.length} hours of weather data. Running FLake WebAssembly simulation...`, "");
+      let steps;
+      let fromLocalCache = false;
+
+      try {
+        const netResult = await fetchOpenMeteoSeries(lat, lon, period);
+        steps = netResult.steps;
+        // Save to offline cache
+        await WeatherCache.set(cacheId, steps, { lat, lon, period, source: 'Open-Meteo' });
+      } catch (netErr) {
+        // Fallback to offline cache
+        const cached = await WeatherCache.get(cacheId);
+        if (cached && cached.steps && cached.steps.length > 0) {
+          steps = cached.steps;
+          fromLocalCache = true;
+          showApiStatus(`Network unavailable (${netErr.message}). Restored ${steps.length} hours from local offline cache.`, "offline");
+        } else {
+          throw netErr;
+        }
+      }
+
+      if (!fromLocalCache) {
+        showApiStatus(`Received ${steps.length} hours of weather data. Running FLake WebAssembly simulation...`, "");
+      }
 
       // Initial conditions adaptive to starting season and air temperature
       const firstAirT = steps[0].T_air;
@@ -1060,7 +1183,26 @@
       UI.apiScrubber.value = 0;
       UI.apiPlaybackBox.style.display = 'flex';
 
-      showApiStatus(`Simulation complete! ${steps.length} hours processed in ${res.elapsedMs.toFixed(1)} ms.`, "success");
+      if (UI.apiSourcePill) {
+        UI.apiSourcePill.style.display = 'inline-block';
+        if (fromLocalCache) {
+          UI.apiSourcePill.textContent = 'Offline Cache';
+          UI.apiSourcePill.style.color = '#fde68a';
+          UI.apiSourcePill.style.background = 'rgba(245, 158, 11, 0.15)';
+          UI.apiSourcePill.style.borderColor = 'rgba(245, 158, 11, 0.35)';
+        } else {
+          UI.apiSourcePill.textContent = 'Open-Meteo ERA5';
+          UI.apiSourcePill.style.color = '#86efac';
+          UI.apiSourcePill.style.background = 'rgba(34, 197, 94, 0.15)';
+          UI.apiSourcePill.style.borderColor = 'rgba(34, 197, 94, 0.35)';
+        }
+      }
+
+      if (fromLocalCache) {
+        showApiStatus(`Simulation complete! Processed ${steps.length} hours from offline cache in ${res.elapsedMs.toFixed(1)} ms.`, "success");
+      } else {
+        showApiStatus(`Simulation complete! ${steps.length} hours processed in ${res.elapsedMs.toFixed(1)} ms (cached locally).`, "success");
+      }
 
       // Pause continuous generator loop and display first step
       state.isRunning = false;
@@ -1856,6 +1998,7 @@
     state.annualCycle = (presetKey === 'annual');
     state.isDatasetMode = false;
     if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'none';
+    if (UI.apiSourcePill) UI.apiSourcePill.style.display = 'none';
     if (UI.tabForcingManual) {
       UI.tabForcingManual.classList.add('active');
       if (UI.tabForcingCurated) UI.tabForcingCurated.classList.remove('active');
@@ -2204,6 +2347,7 @@
         if (UI.panelForcingApi) UI.panelForcingApi.style.display = 'none';
         if (UI.panelForcingCustom) UI.panelForcingCustom.style.display = 'none';
         if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'none';
+        if (UI.apiSourcePill) UI.apiSourcePill.style.display = 'none';
         state.isRunning = true;
         UI.btnPlay.textContent = 'Pause';
         UI.clockDot.className = 'clock-dot';

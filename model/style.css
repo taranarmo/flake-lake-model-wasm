@@ -637,6 +637,18 @@ main {
   color: #86efac;
 }
 
+.api-status-box.info {
+  background: rgba(14, 165, 233, 0.12);
+  border-color: rgba(14, 165, 233, 0.35);
+  color: #7dd3fc;
+}
+
+.api-status-box.offline {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.35);
+  color: #fde68a;
+}
+
 .api-playback-box {
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid var(--border-color);
