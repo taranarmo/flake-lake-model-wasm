@@ -895,14 +895,24 @@
     let url = '';
     const now = new Date();
 
-    if (period === '2024') {
+    const fmt = d => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
+
+    if (period === 'pastYear' || period === 'latestYear') {
+      const endD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+      const startD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 365);
+      url = `https://archive-api.open-meteo.com/v1/era5?latitude=${lat}&longitude=${lon}&start_date=${fmt(startD)}&end_date=${fmt(endD)}&hourly=temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,shortwave_radiation,cloud_cover,snowfall&wind_speed_unit=ms`;
+    } else if (period === '2024') {
       url = `https://archive-api.open-meteo.com/v1/era5?latitude=${lat}&longitude=${lon}&start_date=2024-01-01&end_date=2024-12-31&hourly=temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,shortwave_radiation,cloud_cover,snowfall&wind_speed_unit=ms`;
     } else if (period === '2023') {
       url = `https://archive-api.open-meteo.com/v1/era5?latitude=${lat}&longitude=${lon}&start_date=2023-01-01&end_date=2023-12-31&hourly=temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,shortwave_radiation,cloud_cover,snowfall&wind_speed_unit=ms`;
     } else if (period === 'recent30') {
-      const endD = new Date(now.getTime() - 2 * 24 * 3600 * 1000);
-      const startD = new Date(endD.getTime() - 30 * 24 * 3600 * 1000);
-      const fmt = d => d.toISOString().split('T')[0];
+      const endD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 2);
+      const startD = new Date(endD.getFullYear(), endD.getMonth(), endD.getDate() - 30);
       url = `https://archive-api.open-meteo.com/v1/era5?latitude=${lat}&longitude=${lon}&start_date=${fmt(startD)}&end_date=${fmt(endD)}&hourly=temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,shortwave_radiation,cloud_cover,snowfall&wind_speed_unit=ms`;
     } else if (period === 'forecast') {
       url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,shortwave_radiation,cloud_cover,snowfall&wind_speed_unit=ms&past_days=7&forecast_days=7`;
@@ -930,10 +940,18 @@
 
     for (let i = 0; i < hourly.time.length; i++) {
       const timeIso = hourly.time[i];
-      const d = new Date(timeIso);
-      const startOfYear = new Date(d.getFullYear(), 0, 0);
-      const dayOfYear = Math.max(1, Math.floor((d - startOfYear) / (1000 * 60 * 60 * 24)));
-      const hourOfDay = d.getHours();
+      const parts = timeIso.split('T');
+      const datePart = parts[0];
+      const timePart = parts[1] || '00:00';
+      const [yearStr, monthStr, dayStr] = datePart.split('-');
+      const year = parseInt(yearStr, 10);
+      const month = parseInt(monthStr, 10) - 1;
+      const day = parseInt(dayStr, 10);
+      const hourOfDay = parseInt(timePart.split(':')[0], 10) || 0;
+
+      const dUtc = Date.UTC(year, month, day);
+      const startOfYearUtc = Date.UTC(year, 0, 1);
+      const dayOfYear = Math.floor((dUtc - startOfYearUtc) / (24 * 3600 * 1000)) + 1;
 
       const T_air = hourly.temperature_2m[i] != null ? hourly.temperature_2m[i] : 10.0;
       const solar = Math.max(0, hourly.shortwave_radiation[i] || 0.0);
@@ -997,18 +1015,20 @@
       const { steps } = await fetchOpenMeteoSeries(lat, lon, period);
       showApiStatus(`Received ${steps.length} hours of weather data. Running FLake WebAssembly simulation...`, "");
 
-      // Initial conditions: cold homothermy near 4°C if in winter, or first air temp bounded
+      // Initial conditions adaptive to starting season and air temperature
       const firstAirT = steps[0].T_air;
-      const initTemp = Math.max(1.0, Math.min(firstAirT, 6.0));
+      const isSubZero = firstAirT <= 0.0;
+      const initTsfc = isSubZero ? 0.0 : Math.min(firstAirT, 20.0);
+      const isWarm = initTsfc > 4.0;
       const initState = {
-        Tsfc: initTemp,
-        TwML: initTemp,
+        Tsfc: initTsfc,
+        TwML: initTsfc,
         Tbot: 4.0,
-        Tmnw: Math.min(initTemp, 4.0),
-        hML: state.lakeDepth,
+        Tmnw: isSubZero ? 2.0 : isWarm ? (initTsfc + 4.0) / 2 : Math.min(initTsfc, 4.0),
+        hML: isSubZero ? state.lakeDepth : isWarm ? Math.max(1.5, Math.min(state.lakeDepth * 0.4, 10.0)) : state.lakeDepth,
         CT: 0.5,
-        hice: initTemp <= 0 ? 0.05 : 0.0,
-        Tice: initTemp <= 0 ? -1.0 : 0.0,
+        hice: isSubZero ? 0.05 : 0.0,
+        Tice: isSubZero ? -1.0 : 0.0,
         hsnow: 0.0,
         Tsnow: 0.0
       };
@@ -1086,7 +1106,11 @@
     UI.teleHice.textContent = (res.hice * 100).toFixed(1);
     UI.teleCt.textContent = res.CT.toFixed(3);
 
-    UI.clockText.textContent = getSimulatedDateString(engine.dayOfYear, engine.hourOfDay);
+    if (state.isDatasetMode && forcing && forcing.timeStr) {
+      UI.clockText.textContent = forcing.timeStr;
+    } else {
+      UI.clockText.textContent = getSimulatedDateString(engine.dayOfYear, engine.hourOfDay);
+    }
 
     const regime = engine.getRegime();
     UI.regimeBadge.textContent = regime.label;
@@ -2492,7 +2516,7 @@
         UI.historyTooltip.style.left = `${Math.min(rect.width - 160, mouseX + 10)}px`;
         UI.historyTooltip.style.top = `${Math.max(10, mouseY - 70)}px`;
         UI.historyTooltip.innerHTML = `
-          <div style="font-weight:600; color:#38bdf8;">Day ${h.dayOfYear}, ${h.hourOfDay}:00</div>
+          <div style="font-weight:600; color:#38bdf8;">${h.timeStr ? h.timeStr : `Day ${h.dayOfYear}, ${h.hourOfDay}:00`}</div>
           <div>T_sfc: <b style="color:#f43f5e;">${h.Tsfc.toFixed(1)}°C</b></div>
           <div>T_wML: <b style="color:#fbbf24;">${h.TwML.toFixed(1)}°C</b></div>
           <div>T_bot: <b style="color:#38bdf8;">${h.Tbot.toFixed(1)}°C</b></div>
