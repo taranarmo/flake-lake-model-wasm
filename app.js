@@ -123,6 +123,96 @@
       description: "World's deepest freshwater rift lake (mean depth 744m, max depth 1642m). Depth is fully customizable.",
       source: 'ERA5 Reanalysis (2024)',
       file: 'baikal.json'
+    },
+    constance: {
+      id: 'constance',
+      name: 'Lake Constance / Bodensee',
+      location: 'Germany / Switzerland / Austria',
+      regime: 'Warm Monomictic (Deep Pre-Alpine)',
+      regimeShort: 'Monomictic',
+      regimeColor: '#2563eb',
+      depth: 45.0,
+      fetch: 15000,
+      clarity: 0.5,
+      lat: 47.63,
+      description: 'Large sub-alpine lake that stratifies intensely in summer and mixes throughout winter with rare freezing events.',
+      source: 'ERA5 Reanalysis (2024)',
+      file: 'constance.json'
+    },
+    superior: {
+      id: 'superior',
+      name: 'Lake Superior',
+      location: 'USA / Canada',
+      regime: 'Cold Dimictic (Laurentian Great Lake)',
+      regimeShort: 'Cold Dimictic',
+      regimeColor: '#0284c7',
+      depth: 50.0,
+      fetch: 35000,
+      clarity: 0.25,
+      lat: 47.70,
+      description: 'Largest freshwater lake by surface area, displaying strong spring thermal bars and winter ice dynamics.',
+      source: 'ERA5 Reanalysis (2024)',
+      file: 'superior.json'
+    },
+    tahoe: {
+      id: 'tahoe',
+      name: 'Lake Tahoe',
+      location: 'California / Nevada, USA',
+      regime: 'Ultra-Oligotrophic Monomictic (Subalpine)',
+      regimeShort: 'Deep Alpine',
+      regimeColor: '#4f46e5',
+      depth: 50.0,
+      fetch: 18000,
+      clarity: 0.15,
+      lat: 39.09,
+      description: 'Renowned for exceptional optical clarity and immense thermal volume; does not freeze in winter.',
+      source: 'ERA5 Reanalysis (2024)',
+      file: 'tahoe.json'
+    },
+    victoria: {
+      id: 'victoria',
+      name: 'Lake Victoria',
+      location: 'Uganda / Kenya / Tanzania',
+      regime: 'Tropical Monomictic / Polymictic (Equatorial)',
+      regimeShort: 'Tropical',
+      regimeColor: '#d97706',
+      depth: 40.0,
+      fetch: 30000,
+      clarity: 1.0,
+      lat: -1.00,
+      description: 'Largest tropical freshwater lake; experiences minimal seasonal solar variance with stratification governed by monsoonal wind patterns.',
+      source: 'ERA5 Reanalysis (2024)',
+      file: 'victoria.json'
+    },
+    ladoga: {
+      id: 'ladoga',
+      name: 'Lake Ladoga',
+      location: 'Northwestern Russia',
+      regime: 'Subarctic Dimictic (Boreal)',
+      regimeShort: 'Cold / Ice',
+      regimeColor: '#0891b2',
+      depth: 51.0,
+      fetch: 30000,
+      clarity: 0.6,
+      lat: 61.00,
+      description: 'Largest lake in Europe by surface area, characterized by persistent seasonal ice cover and pronounced spring inverse stratification.',
+      source: 'ERA5 Reanalysis (2024)',
+      file: 'ladoga.json'
+    },
+    balaton: {
+      id: 'balaton',
+      name: 'Lake Balaton',
+      location: 'Hungary',
+      regime: 'Shallow Polymictic (Steppe Lake)',
+      regimeShort: 'Polymictic',
+      regimeColor: '#059669',
+      depth: 3.2,
+      fetch: 12000,
+      clarity: 1.8,
+      lat: 46.85,
+      description: 'Largest lake in Central Europe; highly turbulent shallow basin that responds almost instantaneously to atmospheric forcing.',
+      source: 'ERA5 Reanalysis (2024)',
+      file: 'balaton.json'
     }
   };
 
@@ -135,7 +225,9 @@
     superior: { name: 'Lake Superior', lat: 47.70, lon: -87.50, depth: 50.0, clarity: 0.25 },
     baikal: { name: 'Lake Baikal', lat: 53.50, lon: 108.20, depth: 744.0, clarity: 0.2 },
     tahoe: { name: 'Lake Tahoe', lat: 39.09, lon: -120.03, depth: 50.0, clarity: 0.15 },
-    victoria: { name: 'Lake Victoria', lat: -1.00, lon: 33.00, depth: 40.0, clarity: 1.0 }
+    victoria: { name: 'Lake Victoria', lat: -1.00, lon: 33.00, depth: 40.0, clarity: 1.0 },
+    ladoga: { name: 'Lake Ladoga', lat: 61.00, lon: 31.50, depth: 51.0, clarity: 0.6 },
+    balaton: { name: 'Lake Balaton', lat: 46.85, lon: 17.75, depth: 3.2, clarity: 1.8 }
   };
 
   function getSimulatedDateString(dayOfYear, hourOfDay) {
