@@ -26,13 +26,20 @@
     snowRate: 0.0,           // kg/m2/s
     qLw: null,               // auto
 
+    // Forcing Mode & Dataset
+    forcingMode: 'manual',   // 'manual' | 'api'
+    isDatasetMode: false,
+    datasetSeries: [],
+    datasetResults: [],
+    datasetIndex: 0,
+
     // Lake geometry
     lakeDepth: 12.0,
     waterClarity: 1.0,
 
-    // Time series history buffer (up to 720 hours = 30 days)
+    // Time series history buffer (up to 8760 hours)
     history: [],
-    maxHistoryLength: 720,
+    maxHistoryLength: 8760,
 
     // Latest direct calculation result
     lastCalcResult: null
@@ -40,6 +47,18 @@
 
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const DAYS_IN_MONTHS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+  const LAKE_PRESETS = {
+    mueggelsee: { name: 'Müggelsee, Berlin', lat: 52.43, lon: 13.63, depth: 4.9, clarity: 1.2 },
+    heiligensee: { name: 'Heiligensee, Berlin', lat: 52.60, lon: 13.22, depth: 4.5, clarity: 1.5 },
+    stechlin: { name: 'Stechlinsee, Brandenburg', lat: 53.15, lon: 13.03, depth: 22.8, clarity: 0.3 },
+    geneva: { name: 'Lake Geneva / Léman', lat: 46.45, lon: 6.60, depth: 40.0, clarity: 0.4 },
+    constance: { name: 'Lake Constance / Bodensee', lat: 47.63, lon: 9.38, depth: 45.0, clarity: 0.5 },
+    superior: { name: 'Lake Superior', lat: 47.70, lon: -87.50, depth: 50.0, clarity: 0.25 },
+    baikal: { name: 'Lake Baikal', lat: 53.50, lon: 108.20, depth: 50.0, clarity: 0.2 },
+    tahoe: { name: 'Lake Tahoe', lat: 39.09, lon: -120.03, depth: 50.0, clarity: 0.15 },
+    victoria: { name: 'Lake Victoria', lat: -1.00, lon: 33.00, depth: 40.0, clarity: 1.0 }
+  };
 
   function getSimulatedDateString(dayOfYear, hourOfDay) {
     let day = dayOfYear;
@@ -63,6 +82,28 @@
     viewSimulation: document.getElementById('view-simulation'),
     viewCalculator: document.getElementById('view-calculator'),
     headerSimControls: document.getElementById('header-sim-controls'),
+
+    // Forcing Mode Tabs & Panels
+    tabForcingManual: document.getElementById('tab-forcing-manual'),
+    tabForcingApi: document.getElementById('tab-forcing-api'),
+    panelForcingManual: document.getElementById('panel-forcing-manual'),
+    panelForcingApi: document.getElementById('panel-forcing-api'),
+
+    // API Controls
+    apiLakePreset: document.getElementById('api-lake-preset'),
+    apiLat: document.getElementById('api-lat'),
+    apiLon: document.getElementById('api-lon'),
+    apiPeriod: document.getElementById('api-period'),
+    btnFetchApi: document.getElementById('btn-fetch-api'),
+    apiStatusBox: document.getElementById('api-status-box'),
+    apiStatusText: document.getElementById('api-status-text'),
+    apiPlaybackBox: document.getElementById('api-playback-box'),
+    apiTimePill: document.getElementById('api-time-pill'),
+    apiScrubber: document.getElementById('api-scrubber'),
+    statTsfcMin: document.getElementById('stat-tsfc-min'),
+    statTsfcMax: document.getElementById('stat-tsfc-max'),
+    statIceDays: document.getElementById('stat-ice-days'),
+    statSimTime: document.getElementById('stat-sim-time'),
 
     // Simulation Controls
     btnPlay: document.getElementById('btn-play'),
@@ -204,6 +245,17 @@
   }
 
   function stepSimulation() {
+    if (state.isDatasetMode) {
+      if (state.datasetResults && state.datasetResults.length > 0) {
+        let nextIdx = state.datasetIndex + 1;
+        if (nextIdx >= state.datasetResults.length) {
+          nextIdx = 0; // loop
+        }
+        applyDatasetStep(nextIdx);
+      }
+      return;
+    }
+
     const forcing = getInstantaneousForcing();
     const res = engine.step(forcing);
 
@@ -228,6 +280,203 @@
     }
 
     updateTelemetry(res, forcing);
+  }
+
+  function showApiStatus(msg, type = '') {
+    if (!UI.apiStatusBox || !UI.apiStatusText) return;
+    if (!msg) {
+      UI.apiStatusBox.style.display = 'none';
+      return;
+    }
+    UI.apiStatusBox.style.display = 'flex';
+    UI.apiStatusBox.className = 'api-status-box' + (type ? ' ' + type : '');
+    UI.apiStatusText.textContent = msg;
+  }
+
+  async function fetchOpenMeteoSeries(lat, lon, period) {
+    let url = '';
+    const now = new Date();
+
+    if (period === '2024') {
+      url = `https://archive-api.open-meteo.com/v1/era5?latitude=${lat}&longitude=${lon}&start_date=2024-01-01&end_date=2024-12-31&hourly=temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,shortwave_radiation,cloud_cover,snowfall&wind_speed_unit=ms`;
+    } else if (period === '2023') {
+      url = `https://archive-api.open-meteo.com/v1/era5?latitude=${lat}&longitude=${lon}&start_date=2023-01-01&end_date=2023-12-31&hourly=temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,shortwave_radiation,cloud_cover,snowfall&wind_speed_unit=ms`;
+    } else if (period === 'recent30') {
+      const endD = new Date(now.getTime() - 2 * 24 * 3600 * 1000);
+      const startD = new Date(endD.getTime() - 30 * 24 * 3600 * 1000);
+      const fmt = d => d.toISOString().split('T')[0];
+      url = `https://archive-api.open-meteo.com/v1/era5?latitude=${lat}&longitude=${lon}&start_date=${fmt(startD)}&end_date=${fmt(endD)}&hourly=temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,shortwave_radiation,cloud_cover,snowfall&wind_speed_unit=ms`;
+    } else if (period === 'forecast') {
+      url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,shortwave_radiation,cloud_cover,snowfall&wind_speed_unit=ms&past_days=7&forecast_days=7`;
+    }
+
+    const resp = await fetch(url);
+    if (!resp.ok) {
+      let reason = `HTTP ${resp.status}`;
+      try {
+        const j = await resp.json();
+        if (j.reason) reason = j.reason;
+      } catch (_) {}
+      throw new Error(`Open-Meteo API query failed: ${reason}`);
+    }
+
+    const data = await resp.json();
+    if (!data.hourly || !data.hourly.time || data.hourly.time.length === 0) {
+      throw new Error("No hourly meteorological data returned for these coordinates.");
+    }
+
+    const hourly = data.hourly;
+    const steps = [];
+    const K = 273.15;
+    const sigma = 5.670374e-8;
+
+    for (let i = 0; i < hourly.time.length; i++) {
+      const timeIso = hourly.time[i];
+      const d = new Date(timeIso);
+      const startOfYear = new Date(d.getFullYear(), 0, 0);
+      const dayOfYear = Math.max(1, Math.floor((d - startOfYear) / (1000 * 60 * 60 * 24)));
+      const hourOfDay = d.getHours();
+
+      const T_air = hourly.temperature_2m[i] != null ? hourly.temperature_2m[i] : 10.0;
+      const solar = Math.max(0, hourly.shortwave_radiation[i] || 0.0);
+      const wind = Math.max(0.2, hourly.wind_speed_10m[i] || 2.0);
+      const rh = Math.max(0.05, Math.min(1.0, (hourly.relative_humidity_2m[i] != null ? hourly.relative_humidity_2m[i] : 70) / 100.0));
+      const p_pa = (hourly.surface_pressure[i] || 1013.25) * 100.0;
+      const cloud_pct = hourly.cloud_cover[i] != null ? hourly.cloud_cover[i] : 50;
+      const cl_tot = Math.max(0, Math.min(1.0, cloud_pct / 100.0));
+      const snow_cm = hourly.snowfall[i] || 0.0;
+
+      // Vapor pressure via Magnus-Teten
+      const e_sat = 611.2 * Math.exp((17.67 * T_air) / (T_air + 243.5));
+      const e_a = rh * e_sat;
+      const q_air = (0.622 * e_a) / (p_pa - 0.378 * e_a);
+
+      // Longwave radiation with water vapor and cloudiness formulation
+      const T_k = T_air + K;
+      const eps_clear = Math.min(0.85, 0.61 + 0.005 * Math.sqrt(Math.min(e_a, 2000)));
+      const f_cloud = 1.0 + 0.22 * (cl_tot * cl_tot);
+      const Q_lw = eps_clear * f_cloud * sigma * Math.pow(T_k, 4);
+
+      // Snow rate in kg m^-2 s^-1
+      const snowRate = (snow_cm * 0.01 * 100) / 3600;
+
+      steps.push({
+        timeStr: timeIso.replace('T', ' '),
+        dateStr: timeIso.split('T')[0],
+        dayOfYear,
+        hourOfDay,
+        T_air,
+        solar,
+        wind,
+        Q_lw,
+        q_air,
+        snowRate,
+        del_time: 3600.0
+      });
+    }
+
+    return { steps, data };
+  }
+
+  async function handleFetchApiWeather() {
+    const lat = parseFloat(UI.apiLat.value);
+    const lon = parseFloat(UI.apiLon.value);
+    const period = UI.apiPeriod.value;
+
+    if (isNaN(lat) || lat < -90 || lat > 90) {
+      showApiStatus("Please enter a valid latitude (-90 to 90).", "error");
+      return;
+    }
+    if (isNaN(lon) || lon < -180 || lon > 180) {
+      showApiStatus("Please enter a valid longitude (-180 to 180).", "error");
+      return;
+    }
+
+    showApiStatus(`Requesting Open-Meteo weather data for (${lat.toFixed(2)}°, ${lon.toFixed(2)}°)...`, "");
+    UI.btnFetchApi.disabled = true;
+
+    try {
+      const { steps } = await fetchOpenMeteoSeries(lat, lon, period);
+      showApiStatus(`Received ${steps.length} hours of weather data. Running FLake WebAssembly simulation...`, "");
+
+      // Initial conditions: cold homothermy near 4°C if in winter, or first air temp bounded
+      const firstAirT = steps[0].T_air;
+      const initTemp = Math.max(1.0, Math.min(firstAirT, 6.0));
+      const initState = {
+        Tsfc: initTemp,
+        TwML: initTemp,
+        Tbot: 4.0,
+        Tmnw: Math.min(initTemp, 4.0),
+        hML: state.lakeDepth,
+        CT: 0.5,
+        hice: initTemp <= 0 ? 0.05 : 0.0,
+        Tice: initTemp <= 0 ? -1.0 : 0.0,
+        hsnow: 0.0,
+        Tsnow: 0.0
+      };
+
+      const res = engine.runTimeSeries(steps, { depth: state.lakeDepth, extinWater: state.waterClarity }, initState);
+
+      state.isDatasetMode = true;
+      state.datasetSeries = steps;
+      state.datasetResults = res.history;
+      state.datasetIndex = 0;
+      state.history = res.history;
+
+      // Calculate statistics
+      let minTsfc = 100, maxTsfc = -100;
+      let iceHours = 0;
+      for (let h of res.history) {
+        if (h.Tsfc < minTsfc) minTsfc = h.Tsfc;
+        if (h.Tsfc > maxTsfc) maxTsfc = h.Tsfc;
+        if (h.hice > 0.001) iceHours++;
+      }
+      const iceDays = Math.round(iceHours / 24);
+
+      UI.statTsfcMin.textContent = `${minTsfc.toFixed(1)} °C`;
+      UI.statTsfcMax.textContent = `${maxTsfc.toFixed(1)} °C`;
+      UI.statIceDays.textContent = `${iceDays} d`;
+      UI.statSimTime.textContent = `${res.elapsedMs.toFixed(1)} ms`;
+
+      UI.apiScrubber.max = steps.length - 1;
+      UI.apiScrubber.value = 0;
+      UI.apiPlaybackBox.style.display = 'flex';
+
+      showApiStatus(`Simulation complete! ${steps.length} hours processed in ${res.elapsedMs.toFixed(1)} ms.`, "success");
+
+      // Pause continuous generator loop and display first step
+      state.isRunning = false;
+      UI.btnPlay.textContent = 'Run';
+      UI.clockDot.className = 'clock-dot paused';
+
+      applyDatasetStep(0);
+
+    } catch (err) {
+      console.error("Open-Meteo fetch/simulation error:", err);
+      showApiStatus(`Error: ${err.message}`, "error");
+    } finally {
+      UI.btnFetchApi.disabled = false;
+    }
+  }
+
+  function applyDatasetStep(idx) {
+    if (!state.datasetResults || !state.datasetResults[idx]) return;
+    const res = state.datasetResults[idx];
+    const forcing = state.datasetSeries[idx];
+
+    state.datasetIndex = idx;
+    UI.apiScrubber.value = idx;
+    UI.apiTimePill.textContent = res.timeStr;
+
+    engine.setState(res);
+    engine.simulatedHours = idx;
+    engine.dayOfYear = res.dayOfYear;
+    engine.hourOfDay = res.hourOfDay;
+
+    updateTelemetry(res, forcing);
+    renderLakeColumn();
+    renderVerticalProfile();
+    renderHistoryChart();
   }
 
   function updateTelemetry(res, forcing) {
@@ -653,11 +902,19 @@
 
     ctxHistory.textAlign = 'center';
     ctxHistory.fillStyle = '#6b7280';
-    const timeTickInterval = Math.max(1, Math.floor(history.length / 6));
-    for (let i = 0; i < history.length; i += timeTickInterval) {
-      const h = history[i];
-      const x = xPos(i);
-      ctxHistory.fillText(`D${h.dayOfYear} ${h.hourOfDay}h`, x, height - 10);
+    if (history.length >= 2000) {
+      for (let m = 0; m < 12; m++) {
+        const mIdx = Math.min(history.length - 1, Math.floor((m + 0.5) * (history.length / 12)));
+        const x = xPos(mIdx);
+        ctxHistory.fillText(MONTHS[m], x, height - 10);
+      }
+    } else {
+      const timeTickInterval = Math.max(1, Math.floor(history.length / 6));
+      for (let i = 0; i < history.length; i += timeTickInterval) {
+        const h = history[i];
+        const x = xPos(i);
+        ctxHistory.fillText(`D${h.dayOfYear} ${h.hourOfDay}h`, x, height - 10);
+      }
     }
 
     ctxHistory.save();
@@ -715,6 +972,34 @@
     drawSeries(h => h.Tbot, '#38bdf8', 2);
     drawSeries(h => h.TwML, '#fbbf24', 2.2);
     drawSeries(h => h.Tsfc, '#f43f5e', 2.5);
+
+    // Active dataset scrub needle
+    if (state.isDatasetMode && state.datasetIndex != null && history.length > 1) {
+      const curIdx = Math.min(history.length - 1, state.datasetIndex);
+      const curX = xPos(curIdx);
+      ctxHistory.save();
+      ctxHistory.strokeStyle = '#ffffff';
+      ctxHistory.lineWidth = 1.5;
+      ctxHistory.setLineDash([3, 3]);
+      ctxHistory.beginPath();
+      ctxHistory.moveTo(curX, padTop);
+      ctxHistory.lineTo(curX, padTop + chartH);
+      ctxHistory.stroke();
+
+      const curH = history[curIdx];
+      if (curH) {
+        const curY = yTemp(curH.Tsfc);
+        ctxHistory.fillStyle = '#f43f5e';
+        ctxHistory.beginPath();
+        ctxHistory.arc(curX, curY, 4, 0, Math.PI * 2);
+        ctxHistory.fill();
+        ctxHistory.strokeStyle = '#ffffff';
+        ctxHistory.lineWidth = 1.5;
+        ctxHistory.setLineDash([]);
+        ctxHistory.stroke();
+      }
+      ctxHistory.restore();
+    }
 
     ctxHistory.strokeStyle = 'rgba(255, 255, 255, 0.15)';
     ctxHistory.strokeRect(padLeft, padTop, chartW, chartH);
@@ -846,6 +1131,14 @@
   function applyPreset(presetKey) {
     state.preset = presetKey;
     state.annualCycle = (presetKey === 'annual');
+    state.isDatasetMode = false;
+    if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'none';
+    if (UI.tabForcingManual) {
+      UI.tabForcingManual.classList.add('active');
+      UI.tabForcingApi.classList.remove('active');
+      UI.panelForcingManual.style.display = 'block';
+      UI.panelForcingApi.style.display = 'none';
+    }
 
     document.querySelectorAll('.preset-chip').forEach(el => el.classList.remove('active'));
     const btn = document.getElementById(`preset-${presetKey}`);
@@ -1143,20 +1436,95 @@
       state.isRunning = false;
       UI.btnPlay.textContent = 'Run';
       UI.clockDot.className = 'clock-dot paused';
-      stepSimulation();
+      if (state.isDatasetMode && state.datasetResults.length > 0) {
+        applyDatasetStep(Math.min(state.datasetResults.length - 1, state.datasetIndex + 1));
+      } else {
+        stepSimulation();
+      }
     });
 
     UI.btnDay.addEventListener('click', () => {
-      for (let i = 0; i < 24; i++) stepSimulation();
+      if (state.isDatasetMode && state.datasetResults.length > 0) {
+        applyDatasetStep(Math.min(state.datasetResults.length - 1, state.datasetIndex + 24));
+      } else {
+        for (let i = 0; i < 24; i++) stepSimulation();
+      }
     });
 
     UI.btnReset.addEventListener('click', () => {
-      applyPreset(state.preset);
+      if (state.isDatasetMode) {
+        applyDatasetStep(0);
+      } else {
+        applyPreset(state.preset);
+      }
     });
 
     UI.speedSelect.addEventListener('change', (e) => {
       state.speed = parseInt(e.target.value, 10);
     });
+
+    // Forcing Mode switching
+    if (UI.tabForcingManual && UI.tabForcingApi) {
+      UI.tabForcingManual.addEventListener('click', () => {
+        state.forcingMode = 'manual';
+        state.isDatasetMode = false;
+        UI.tabForcingManual.classList.add('active');
+        UI.tabForcingApi.classList.remove('active');
+        UI.panelForcingManual.style.display = 'block';
+        UI.panelForcingApi.style.display = 'none';
+        if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'none';
+        state.isRunning = true;
+        UI.btnPlay.textContent = 'Pause';
+        UI.clockDot.className = 'clock-dot';
+      });
+
+      UI.tabForcingApi.addEventListener('click', () => {
+        state.forcingMode = 'api';
+        UI.tabForcingApi.classList.add('active');
+        UI.tabForcingManual.classList.remove('active');
+        UI.panelForcingApi.style.display = 'block';
+        UI.panelForcingManual.style.display = 'none';
+        if (state.datasetResults && state.datasetResults.length > 0) {
+          state.isDatasetMode = true;
+          if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'flex';
+        } else {
+          state.isRunning = false;
+          UI.btnPlay.textContent = 'Run';
+          UI.clockDot.className = 'clock-dot paused';
+        }
+      });
+    }
+
+    // Lake Preset Dropdown in API mode
+    if (UI.apiLakePreset) {
+      UI.apiLakePreset.addEventListener('change', (e) => {
+        const pKey = e.target.value;
+        if (pKey && LAKE_PRESETS[pKey]) {
+          const info = LAKE_PRESETS[pKey];
+          UI.apiLat.value = info.lat;
+          UI.apiLon.value = info.lon;
+          state.lakeDepth = info.depth;
+          state.waterClarity = info.clarity;
+          UI.sliderDepth.value = info.depth;
+          UI.valDepth.textContent = `${info.depth.toFixed(1)} m`;
+          UI.selectClarity.value = info.clarity.toString();
+          engine.setLakeParameters({ depth: info.depth, extinWater: info.clarity });
+        }
+      });
+    }
+
+    // Fetch API button
+    if (UI.btnFetchApi) {
+      UI.btnFetchApi.addEventListener('click', handleFetchApiWeather);
+    }
+
+    // Scrubber input
+    if (UI.apiScrubber) {
+      UI.apiScrubber.addEventListener('input', (e) => {
+        const idx = parseInt(e.target.value, 10);
+        applyDatasetStep(idx);
+      });
+    }
 
     UI.presetSummer.addEventListener('click', () => applyPreset('summer'));
     UI.presetAutumn.addEventListener('click', () => applyPreset('autumn'));

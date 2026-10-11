@@ -187,51 +187,140 @@
           <div class="panel-card">
             <div class="panel-title">
               <span>Atmospheric Forcing</span>
-              <span style="font-size: 0.75rem; color: var(--text-muted);">Boundary Fluxes</span>
+              <span style="font-size: 0.75rem; color: var(--text-muted);">Weather Driving Engine</span>
             </div>
 
-            <!-- Air Temperature -->
-            <div class="control-group">
-              <div class="control-label-row">
-                <span class="control-label">Air Temperature (T_a)</span>
-                <span id="val-airtemp" class="control-val-display">24.0 °C</span>
+            <!-- Forcing Mode Tabs -->
+            <div class="forcing-tabs">
+              <button type="button" id="tab-forcing-manual" class="forcing-tab active" title="Use manual sliders and diurnal/seasonal oscillations">
+                Manual Sliders
+              </button>
+              <button type="button" id="tab-forcing-api" class="forcing-tab" title="Fetch live or historical ERA5 reanalysis weather data via Open-Meteo">
+                Open-Meteo API
+              </button>
+            </div>
+
+            <!-- PANEL A: Manual Sliders (Default) -->
+            <div id="panel-forcing-manual">
+              <!-- Air Temperature -->
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span class="control-label">Air Temperature (T_a)</span>
+                  <span id="val-airtemp" class="control-val-display">24.0 °C</span>
+                </div>
+                <input type="range" id="slider-airtemp" class="slider-input" min="-25" max="38" step="0.5" value="24.0">
               </div>
-              <input type="range" id="slider-airtemp" class="slider-input" min="-25" max="38" step="0.5" value="24.0">
-            </div>
 
-            <!-- Solar Radiation -->
-            <div class="control-group">
-              <div class="control-label-row">
-                <span class="control-label">Solar Shortwave (I_atm)</span>
-                <span id="val-solar" class="control-val-display">650 W/m²</span>
+              <!-- Solar Radiation -->
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span class="control-label">Solar Shortwave (I_atm)</span>
+                  <span id="val-solar" class="control-val-display">650 W/m²</span>
+                </div>
+                <input type="range" id="slider-solar" class="slider-input" min="0" max="950" step="10" value="650">
               </div>
-              <input type="range" id="slider-solar" class="slider-input" min="0" max="950" step="10" value="650">
-            </div>
 
-            <!-- Wind Speed -->
-            <div class="control-group">
-              <div class="control-label-row">
-                <span class="control-label">Wind Speed (10m)</span>
-                <span id="val-wind" class="control-val-display">2.5 m/s</span>
+              <!-- Wind Speed -->
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span class="control-label">Wind Speed (10m)</span>
+                  <span id="val-wind" class="control-val-display">2.5 m/s</span>
+                </div>
+                <input type="range" id="slider-wind" class="slider-input" min="0.5" max="22" step="0.5" value="2.5">
               </div>
-              <input type="range" id="slider-wind" class="slider-input" min="0.5" max="22" step="0.5" value="2.5">
-            </div>
 
-            <!-- Snowfall Rate -->
-            <div class="control-group">
-              <div class="control-label-row">
-                <span class="control-label">Snow Precipitation</span>
-                <span id="val-snow" class="control-val-display">0.0 mm/h</span>
+              <!-- Snowfall Rate -->
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span class="control-label">Snow Precipitation</span>
+                  <span id="val-snow" class="control-val-display">0.0 mm/h</span>
+                </div>
+                <input type="range" id="slider-snow" class="slider-input" min="0" max="5" step="0.1" value="0">
               </div>
-              <input type="range" id="slider-snow" class="slider-input" min="0" max="5" step="0.1" value="0">
+
+              <!-- Diurnal Variation Toggle -->
+              <div class="control-group" style="padding-top: 0.5rem; border-top: 1px solid var(--border-color);">
+                <label class="switch-label">
+                  <span>Diurnal Day / Night Cycle</span>
+                  <input type="checkbox" id="chk-diurnal" class="switch-input" checked>
+                </label>
+              </div>
             </div>
 
-            <!-- Diurnal Variation Toggle -->
-            <div class="control-group" style="padding-top: 0.5rem; border-top: 1px solid var(--border-color);">
-              <label class="switch-label">
-                <span>Diurnal Day / Night Cycle</span>
-                <input type="checkbox" id="chk-diurnal" class="switch-input" checked>
-              </label>
+            <!-- PANEL B: Open-Meteo API -->
+            <div id="panel-forcing-api" style="display: none;">
+              <!-- Location Presets / Custom -->
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span class="control-label">Location / Coordinates</span>
+                </div>
+                <select id="api-lake-preset" class="api-select">
+                  <option value="custom">Custom Coordinates...</option>
+                  <option value="mueggelsee" selected>Müggelsee, Berlin (52.43°N, 13.63°E, 4.9m)</option>
+                  <option value="heiligensee">Heiligensee, Berlin (52.60°N, 13.22°E, 4.5m)</option>
+                  <option value="stechlin">Stechlinsee, Brandenburg (53.15°N, 13.03°E, 22.8m)</option>
+                  <option value="geneva">Lake Geneva / Léman (46.45°N, 6.60°E, 40m)</option>
+                  <option value="constance">Lake Constance / Bodensee (47.63°N, 9.38°E, 45m)</option>
+                  <option value="superior">Lake Superior (47.70°N, -87.50°E, 50m)</option>
+                  <option value="baikal">Lake Baikal (53.50°N, 108.20°E, 50m)</option>
+                  <option value="tahoe">Lake Tahoe (39.09°N, -120.03°E, 50m)</option>
+                  <option value="victoria">Lake Victoria (-1.00°N, 33.00°E, 40m)</option>
+                </select>
+              </div>
+
+              <!-- Lat / Lon inputs -->
+              <div class="api-input-grid">
+                <div>
+                  <div class="control-label-row">
+                    <span class="control-label">Latitude (°N)</span>
+                  </div>
+                  <input type="number" id="api-lat" class="api-input" min="-90" max="90" step="0.01" value="52.43">
+                </div>
+                <div>
+                  <div class="control-label-row">
+                    <span class="control-label">Longitude (°E)</span>
+                  </div>
+                  <input type="number" id="api-lon" class="api-input" min="-180" max="180" step="0.01" value="13.63">
+                </div>
+              </div>
+
+              <!-- Time Period -->
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span class="control-label">Meteo Dataset & Period</span>
+                </div>
+                <select id="api-period" class="api-select">
+                  <option value="2024" selected>Full Year 2024 (ERA5 Reanalysis - 8,760 hrs)</option>
+                  <option value="2023">Full Year 2023 (ERA5 Reanalysis - 8,760 hrs)</option>
+                  <option value="recent30">Past 30 Days (Recent ERA5 - 720 hrs)</option>
+                  <option value="forecast">Live Observed + 7-Day Forecast (DWD/ECMWF)</option>
+                </select>
+              </div>
+
+              <!-- Fetch & Run Button -->
+              <button type="button" id="btn-fetch-api" class="btn btn-primary" style="width: 100%; margin-top: 0.4rem;">
+                Fetch & Simulate Real Weather
+              </button>
+
+              <!-- Status Feedback Banner -->
+              <div id="api-status-box" class="api-status-box" style="display: none;">
+                <span id="api-status-text">Ready to fetch</span>
+              </div>
+
+              <!-- Playback & Scrubber Controls (shown when dataset loaded) -->
+              <div id="api-playback-box" class="api-playback-box" style="display: none;">
+                <div class="api-scrub-header">
+                  <span style="font-weight: 600; color: var(--text-main);">Playback Scrubber</span>
+                  <span id="api-time-pill" class="api-time-pill">Hour 0</span>
+                </div>
+                <input type="range" id="api-scrubber" class="slider-input" min="0" max="100" value="0">
+                <div class="api-stats-row">
+                  <span class="api-stat-tag">T_sfc Min: <b id="stat-tsfc-min">--</b></span>
+                  <span class="api-stat-tag">T_sfc Max: <b id="stat-tsfc-max">--</b></span>
+                  <span class="api-stat-tag">Ice Days: <b id="stat-ice-days">0</b></span>
+                  <span class="api-stat-tag">Sim Time: <b id="stat-sim-time">--</b></span>
+                </div>
+              </div>
             </div>
           </div>
 

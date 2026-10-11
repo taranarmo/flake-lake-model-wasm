@@ -544,6 +544,89 @@ class FLakeEngine {
     };
   }
 
+  /**
+   * Sets full engine state and syncs memory pointers.
+   */
+  setState(stateObj) {
+    if (!this.isReady || !this.memView || !this.ptrs.T_sfc_p) return;
+    const mv = this.memView;
+    const p = this.ptrs;
+    const K = 273.15;
+    this.state = { ...stateObj };
+
+    mv.setFloat64(p.T_sfc_p, this.state.Tsfc + K, true);
+    mv.setFloat64(p.T_wML_in, this.state.TwML + K, true);
+    mv.setFloat64(p.T_mnw_in, this.state.Tmnw + K, true);
+    mv.setFloat64(p.T_bot_in, this.state.Tbot + K, true);
+    mv.setFloat64(p.h_ML_in, this.state.hML, true);
+    mv.setFloat64(p.C_T_in, this.state.CT, true);
+    mv.setFloat64(p.h_ice_in, this.state.hice, true);
+    mv.setFloat64(p.T_ice_in, (this.state.Tice || 0) + K, true);
+    mv.setFloat64(p.h_snow_in, this.state.hsnow || 0, true);
+    mv.setFloat64(p.T_snow_in, (this.state.Tsnow || 0) + K, true);
+    mv.setFloat64(p.H_B1_in, 1.0, true);
+    mv.setFloat64(p.T_B1_in, this.state.Tbot + K, true);
+  }
+
+  /**
+   * Runs an entire array of time steps sequentially in WASM.
+   * @param {Array<Object>} series - Array of forcing objects
+   * @param {Object} [lakeParams] - Optional overrides for depth, fetch, extinWater
+   * @param {Object} [initialState] - Optional initial condition
+   */
+  runTimeSeries(series, lakeParams = {}, initialState = null) {
+    if (!this.isReady) throw new Error("FLake WASM engine is not ready");
+
+    const tStart = performance.now();
+    if (lakeParams) {
+      this.setLakeParameters(lakeParams);
+    }
+
+    if (initialState) {
+      this.setState(initialState);
+    }
+
+    this.simulatedHours = 0;
+    const history = [];
+
+    for (let i = 0; i < series.length; i++) {
+      const f = series[i];
+      if (f.dayOfYear != null) this.dayOfYear = f.dayOfYear;
+      if (f.hourOfDay != null) this.hourOfDay = f.hourOfDay;
+
+      const res = this.step(f);
+      history.push({
+        index: i,
+        hour: i,
+        timeStr: f.timeStr || `Hour ${i}`,
+        dateStr: f.dateStr,
+        dayOfYear: this.dayOfYear,
+        hourOfDay: this.hourOfDay,
+        Tsfc: res.Tsfc,
+        TwML: res.TwML,
+        Tbot: res.Tbot,
+        Tmnw: res.Tmnw,
+        hML: res.hML,
+        CT: res.CT,
+        hice: res.hice,
+        Tice: res.Tice,
+        hsnow: res.hsnow,
+        Tsnow: res.Tsnow,
+        Tair: f.T_air,
+        solar: f.solar,
+        wind: f.wind,
+        Q_lw: f.Q_lw
+      });
+    }
+
+    const elapsedMs = performance.now() - tStart;
+    return {
+      history,
+      elapsedMs,
+      totalSteps: series.length
+    };
+  }
+
   getRegime() {
     const { hice, TwML, Tbot, hML } = this.state;
     const D = this.lakeDepth;
