@@ -1092,7 +1092,116 @@
       });
     }
 
-    return { steps, data };
+    return { steps, data, provider: 'Open-Meteo ERA5' };
+  }
+
+  async function fetchNasaPowerSeries(lat, lon, period) {
+    const now = new Date();
+    const fmt = d => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}${m}${day}`;
+    };
+
+    let startStr = '', endStr = '';
+    if (period === 'pastYear' || period === 'latestYear') {
+      const endD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 3);
+      const startD = new Date(endD.getFullYear(), endD.getMonth(), endD.getDate() - 365);
+      startStr = fmt(startD);
+      endStr = fmt(endD);
+    } else if (period === '2024') {
+      startStr = '20240101';
+      endStr = '20241231';
+    } else if (period === '2023') {
+      startStr = '20230101';
+      endStr = '20231231';
+    } else if (period === 'recent30') {
+      const endD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 3);
+      const startD = new Date(endD.getFullYear(), endD.getMonth(), endD.getDate() - 30);
+      startStr = fmt(startD);
+      endStr = fmt(endD);
+    } else {
+      const endD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 3);
+      const startD = new Date(endD.getFullYear(), endD.getMonth(), endD.getDate() - 7);
+      startStr = fmt(startD);
+      endStr = fmt(endD);
+    }
+
+    const params = 'T2M,RH2M,PS,WS10M,ALLSKY_SFC_SW_DWN,ALLSKY_SFC_LW_DWN,PRECTOTCORR,CLOUD_AMT';
+    const url = `https://power.larc.nasa.gov/api/temporal/hourly/point?parameters=${params}&community=RE&longitude=${lon.toFixed(2)}&latitude=${lat.toFixed(2)}&start=${startStr}&end=${endStr}&format=JSON`;
+
+    const resp = await fetch(url);
+    if (!resp.ok) {
+      throw new Error(`NASA POWER HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+    if (!data.properties || !data.properties.parameter || !data.properties.parameter.T2M) {
+      throw new Error("No data returned by NASA POWER API for these coordinates.");
+    }
+
+    const p = data.properties.parameter;
+    const timestamps = Object.keys(p.T2M).sort();
+    if (timestamps.length === 0) {
+      throw new Error("Empty hourly series from NASA POWER API.");
+    }
+
+    const steps = [];
+    const K = 273.15;
+    const sigma = 5.670374e-8;
+
+    for (const ts of timestamps) {
+      const year = parseInt(ts.slice(0, 4), 10);
+      const month = parseInt(ts.slice(4, 6), 10) - 1;
+      const day = parseInt(ts.slice(6, 8), 10);
+      const hour = parseInt(ts.slice(8, 10), 10);
+
+      const dUtc = Date.UTC(year, month, day);
+      const startOfYearUtc = Date.UTC(year, 0, 1);
+      const dayOfYear = Math.floor((dUtc - startOfYearUtc) / (24 * 3600 * 1000)) + 1;
+
+      const T_air = (p.T2M[ts] != null && p.T2M[ts] !== -999) ? p.T2M[ts] : 10.0;
+      const solar = Math.max(0, (p.ALLSKY_SFC_SW_DWN && p.ALLSKY_SFC_SW_DWN[ts] !== -999) ? p.ALLSKY_SFC_SW_DWN[ts] : 0.0);
+      const wind = Math.max(0.2, (p.WS10M && p.WS10M[ts] !== -999) ? p.WS10M[ts] : 2.0);
+      const rh = Math.max(0.05, Math.min(1.0, ((p.RH2M && p.RH2M[ts] !== -999 ? p.RH2M[ts] : 70) / 100.0)));
+      const p_pa = ((p.PS && p.PS[ts] !== -999 ? p.PS[ts] : 101.325) * 1000.0);
+
+      const e_sat = 611.2 * Math.exp((17.67 * T_air) / (T_air + 243.5));
+      const e_a = rh * e_sat;
+      const q_air = (0.622 * e_a) / (p_pa - 0.378 * e_a);
+
+      let Q_lw = (p.ALLSKY_SFC_LW_DWN && p.ALLSKY_SFC_LW_DWN[ts] !== -999) ? p.ALLSKY_SFC_LW_DWN[ts] : null;
+      if (Q_lw == null || Q_lw <= 0) {
+        const cloud_pct = (p.CLOUD_AMT && p.CLOUD_AMT[ts] !== -999 ? p.CLOUD_AMT[ts] : 50);
+        const cl_tot = Math.max(0, Math.min(1.0, cloud_pct / 100.0));
+        const T_k = T_air + K;
+        const eps_clear = Math.min(0.85, 0.61 + 0.005 * Math.sqrt(Math.min(e_a, 2000)));
+        const f_cloud = 1.0 + 0.22 * (cl_tot * cl_tot);
+        Q_lw = eps_clear * f_cloud * sigma * Math.pow(T_k, 4);
+      }
+
+      const precipMmH = (p.PRECTOTCORR && p.PRECTOTCORR[ts] !== -999) ? p.PRECTOTCORR[ts] : 0.0;
+      const snowRate = (T_air <= 0.5 && precipMmH > 0) ? (precipMmH / 3600.0) : 0.0;
+
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const timeStr = `${dateStr} ${String(hour).padStart(2, '0')}:00`;
+
+      steps.push({
+        timeStr,
+        dateStr,
+        dayOfYear,
+        hourOfDay: hour,
+        T_air,
+        solar,
+        wind,
+        Q_lw,
+        q_air,
+        snowRate,
+        del_time: 3600.0
+      });
+    }
+
+    return { steps, data, provider: 'NASA POWER' };
   }
 
   async function handleFetchApiWeather() {
@@ -1110,32 +1219,43 @@
     }
 
     const cacheId = `api:${lat.toFixed(2)}:${lon.toFixed(2)}:${period}`;
-    showApiStatus(`Requesting Open-Meteo weather data for (${lat.toFixed(2)}°, ${lon.toFixed(2)}°)...`, "");
+    showApiStatus(`Requesting weather data for (${lat.toFixed(2)}°, ${lon.toFixed(2)}°)...`, "");
     UI.btnFetchApi.disabled = true;
 
     try {
       let steps;
       let fromLocalCache = false;
+      let providerName = 'Open-Meteo ERA5';
 
       try {
         const netResult = await fetchOpenMeteoSeries(lat, lon, period);
         steps = netResult.steps;
-        // Save to offline cache
-        await WeatherCache.set(cacheId, steps, { lat, lon, period, source: 'Open-Meteo' });
-      } catch (netErr) {
-        // Fallback to offline cache
-        const cached = await WeatherCache.get(cacheId);
-        if (cached && cached.steps && cached.steps.length > 0) {
-          steps = cached.steps;
-          fromLocalCache = true;
-          showApiStatus(`Network unavailable (${netErr.message}). Restored ${steps.length} hours from local offline cache.`, "offline");
-        } else {
-          throw netErr;
+        providerName = 'Open-Meteo ERA5';
+        await WeatherCache.set(cacheId, steps, { lat, lon, period, source: providerName });
+      } catch (openMeteoErr) {
+        console.warn("Open-Meteo failed, attempting fallback to NASA POWER:", openMeteoErr);
+        try {
+          showApiStatus(`Open-Meteo unavailable (${openMeteoErr.message}). Querying NASA POWER global reanalysis...`, "info");
+          const nasaResult = await fetchNasaPowerSeries(lat, lon, period);
+          steps = nasaResult.steps;
+          providerName = 'NASA POWER';
+          await WeatherCache.set(cacheId, steps, { lat, lon, period, source: providerName });
+        } catch (nasaErr) {
+          console.warn("NASA POWER failed, attempting offline cache fallback:", nasaErr);
+          const cached = await WeatherCache.get(cacheId);
+          if (cached && cached.steps && cached.steps.length > 0) {
+            steps = cached.steps;
+            fromLocalCache = true;
+            providerName = 'Offline Cache';
+            showApiStatus(`Weather APIs unavailable. Restored ${steps.length} hours from local offline cache.`, "offline");
+          } else {
+            throw new Error(`Weather query failed across Open-Meteo and NASA POWER: ${openMeteoErr.message}; ${nasaErr.message}`);
+          }
         }
       }
 
       if (!fromLocalCache) {
-        showApiStatus(`Received ${steps.length} hours of weather data. Running FLake WebAssembly simulation...`, "");
+        showApiStatus(`Received ${steps.length} hours of weather data (${providerName}). Running FLake WebAssembly simulation...`, "");
       }
 
       // Initial conditions adaptive to starting season and air temperature
@@ -1190,6 +1310,11 @@
           UI.apiSourcePill.style.color = '#fde68a';
           UI.apiSourcePill.style.background = 'rgba(245, 158, 11, 0.15)';
           UI.apiSourcePill.style.borderColor = 'rgba(245, 158, 11, 0.35)';
+        } else if (providerName === 'NASA POWER') {
+          UI.apiSourcePill.textContent = 'NASA POWER';
+          UI.apiSourcePill.style.color = '#38bdf8';
+          UI.apiSourcePill.style.background = 'rgba(56, 189, 248, 0.15)';
+          UI.apiSourcePill.style.borderColor = 'rgba(56, 189, 248, 0.35)';
         } else {
           UI.apiSourcePill.textContent = 'Open-Meteo ERA5';
           UI.apiSourcePill.style.color = '#86efac';
@@ -1201,7 +1326,7 @@
       if (fromLocalCache) {
         showApiStatus(`Simulation complete! Processed ${steps.length} hours from offline cache in ${res.elapsedMs.toFixed(1)} ms.`, "success");
       } else {
-        showApiStatus(`Simulation complete! ${steps.length} hours processed in ${res.elapsedMs.toFixed(1)} ms (cached locally).`, "success");
+        showApiStatus(`Simulation complete! ${steps.length} hours processed via ${providerName} in ${res.elapsedMs.toFixed(1)} ms (cached locally).`, "success");
       }
 
       // Pause continuous generator loop and display first step
