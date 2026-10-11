@@ -1296,6 +1296,117 @@
     return { steps, data, provider: 'NASA POWER' };
   }
 
+  /**
+   * Self-contained Physical-Stochastic Earth Climatology & Synoptic Weather Generator
+   * Generates continuous hourly astronomical solar radiation and synoptic weather variations
+   * for any latitude and longitude on Earth without requiring external network connectivity.
+   */
+  function generateSynopticClimateSeries(lat, lon, period = 'climatology') {
+    const phi = (lat * Math.PI) / 180.0;
+    const isNorth = lat >= 0;
+    const phaseShift = isNorth ? 0 : Math.PI;
+
+    // Calibrated zonal temperature profile
+    const absLat = Math.abs(lat);
+    const tMean = 27.0 - 0.15 * absLat - 0.0035 * (absLat * absLat);
+    const tAmp = Math.max(1.5, 1.5 + 0.16 * absLat + 0.0006 * (absLat * absLat));
+
+    // Number of days to simulate
+    let totalDays = 365;
+    let startDayOfYear = 1;
+    let baseYear = 2024;
+
+    const now = new Date();
+    if (period === 'pastYear' || period === 'latestYear') {
+      baseYear = now.getFullYear();
+      startDayOfYear = Math.max(1, Math.floor((now - new Date(baseYear, 0, 1)) / (86400 * 1000)));
+    } else if (period === 'recent30') {
+      totalDays = 30;
+      baseYear = now.getFullYear();
+      startDayOfYear = Math.max(1, Math.floor((now - new Date(baseYear, 0, 1)) / (86400 * 1000)) - 30);
+    } else if (period === 'forecast') {
+      totalDays = 14;
+      baseYear = now.getFullYear();
+      startDayOfYear = Math.max(1, Math.floor((now - new Date(baseYear, 0, 1)) / (86400 * 1000)));
+    }
+
+    const steps = [];
+    const K = 273.15;
+    const sigma = 5.670374e-8;
+
+    for (let dIdx = 0; dIdx < totalDays; dIdx++) {
+      const dayNum = ((startDayOfYear + dIdx - 1) % 365) + 1;
+      const annualAngle = ((2.0 * Math.PI * (dayNum - 105)) / 365.0) + phaseShift;
+      const tSeason = tMean + tAmp * Math.cos(annualAngle);
+
+      // Multi-scale synoptic perturbations (Rossby waves with 5.5-day and 11-day cycles)
+      const synopticWave = Math.sin((dIdx * 2.0 * Math.PI) / 5.5) * 3.2 + Math.sin((dIdx * 2.0 * Math.PI) / 11.0) * 1.8;
+      const isCyclone = synopticWave < -0.8;
+
+      const cloudCover = isCyclone ? 0.85 : Math.max(0.1, 0.35 + 0.25 * Math.sin(dIdx * 0.45));
+      const baseWind = isCyclone ? 6.2 : Math.max(0.8, 2.6 + 1.1 * Math.sin(dIdx * 0.65));
+
+      // Solar declination for this day of year
+      const decl = (23.45 * Math.PI / 180.0) * Math.sin(((2.0 * Math.PI * (dayNum - 81)) / 365.0));
+
+      for (let h = 0; h < 24; h++) {
+        const hourAngle = ((h - 12) * 15.0 * Math.PI) / 180.0;
+        const sinElev = Math.sin(phi) * Math.sin(decl) + Math.cos(phi) * Math.cos(decl) * Math.cos(hourAngle);
+
+        // Top-of-atmosphere and surface solar radiation
+        let solar = 0.0;
+        if (sinElev > 0) {
+          const toa = 1361.0 * sinElev;
+          const transmittance = 0.72 * (1.0 - 0.75 * (cloudCover * cloudCover));
+          solar = Math.max(0.0, toa * transmittance);
+        }
+
+        // Diurnal thermal wave peaking at 15:00
+        const diurnal = 3.2 * Math.sin(((h - 9) * 15.0 * Math.PI) / 180.0) * (1.0 - 0.45 * cloudCover);
+        const tAir = Math.round((tSeason + synopticWave + diurnal) * 10) / 10;
+        const wind = Math.max(0.5, Math.round((baseWind + 0.8 * Math.sin((h * Math.PI) / 12)) * 10) / 10);
+
+        // Relative humidity (higher during storm or at night, lower at noon)
+        const rh = Math.max(0.2, Math.min(0.95, (isCyclone ? 0.85 : 0.65 - 0.15 * Math.sin(((h - 9) * 15.0 * Math.PI) / 180.0))));
+        const pPa = 101325.0 - (isCyclone ? 1500.0 : -1000.0);
+
+        const eSat = 611.2 * Math.exp((17.67 * tAir) / (tAir + 243.5));
+        const eA = rh * eSat;
+        const qAir = (0.622 * eA) / (pPa - 0.378 * eA);
+
+        const tK = tAir + K;
+        const epsClear = Math.min(0.85, 0.61 + 0.005 * Math.sqrt(Math.min(eA, 2000)));
+        const fCloud = 1.0 + 0.22 * (cloudCover * cloudCover);
+        const qLw = epsClear * fCloud * sigma * Math.pow(tK, 4);
+
+        const isPrecip = isCyclone && Math.sin(h * 0.8) > 0.2;
+        const precipMmH = isPrecip ? (1.5 + Math.sin(h) * 1.0) : 0.0;
+        const snowRate = (tAir <= 0.5 && precipMmH > 0) ? (precipMmH / 3600.0) : 0.0;
+
+        // Formatted date and time strings
+        const dateObj = new Date(Date.UTC(baseYear, 0, dayNum));
+        const dateStr = dateObj.toISOString().split('T')[0];
+        const timeStr = `${dateStr} ${String(h).padStart(2, '0')}:00`;
+
+        steps.push({
+          timeStr,
+          dateStr,
+          dayOfYear: dayNum,
+          hourOfDay: h,
+          T_air: tAir,
+          solar: Math.round(solar),
+          wind,
+          Q_lw: Math.round(qLw),
+          q_air: Math.round(qAir * 100000) / 100000,
+          snowRate: Math.round(snowRate * 1000000) / 1000000,
+          del_time: 3600.0
+        });
+      }
+    }
+
+    return { steps, provider: 'Offline Climatology' };
+  }
+
   async function handleFetchApiWeather() {
     const lat = parseFloat(UI.apiLat.value);
     const lon = parseFloat(UI.apiLon.value);
@@ -1311,7 +1422,6 @@
     }
 
     const cacheId = `api:${lat.toFixed(2)}:${lon.toFixed(2)}:${period}`;
-    showApiStatus(`Requesting weather data for (${lat.toFixed(2)}°, ${lon.toFixed(2)}°)...`, "");
     UI.btnFetchApi.disabled = true;
 
     try {
@@ -1319,34 +1429,48 @@
       let fromLocalCache = false;
       let providerName = 'Open-Meteo ERA5';
 
-      try {
-        const netResult = await fetchOpenMeteoSeries(lat, lon, period);
-        steps = netResult.steps;
-        providerName = 'Open-Meteo ERA5';
+      if (period === 'climatology') {
+        showApiStatus(`Synthesizing annual meteorological series from offline Earth climatology for (${lat.toFixed(2)}°, ${lon.toFixed(2)}°)...`, "offline");
+        const climResult = generateSynopticClimateSeries(lat, lon, 'climatology');
+        steps = climResult.steps;
+        providerName = 'Offline Climatology';
         await WeatherCache.set(cacheId, steps, { lat, lon, period, source: providerName });
-      } catch (openMeteoErr) {
-        console.warn("Open-Meteo failed, attempting fallback to NASA POWER:", openMeteoErr);
+      } else {
+        showApiStatus(`Requesting weather data for (${lat.toFixed(2)}°, ${lon.toFixed(2)}°)...`, "");
         try {
-          showApiStatus(`Open-Meteo unavailable (${openMeteoErr.message}). Querying NASA POWER global reanalysis...`, "info");
-          const nasaResult = await fetchNasaPowerSeries(lat, lon, period);
-          steps = nasaResult.steps;
-          providerName = 'NASA POWER';
+          const netResult = await fetchOpenMeteoSeries(lat, lon, period);
+          steps = netResult.steps;
+          providerName = 'Open-Meteo ERA5';
           await WeatherCache.set(cacheId, steps, { lat, lon, period, source: providerName });
-        } catch (nasaErr) {
-          console.warn("NASA POWER failed, attempting offline cache fallback:", nasaErr);
-          const cached = await WeatherCache.get(cacheId);
-          if (cached && cached.steps && cached.steps.length > 0) {
-            steps = cached.steps;
-            fromLocalCache = true;
-            providerName = 'Offline Cache';
-            showApiStatus(`Weather APIs unavailable. Restored ${steps.length} hours from local offline cache.`, "offline");
-          } else {
-            throw new Error(`Weather query failed across Open-Meteo and NASA POWER: ${openMeteoErr.message}; ${nasaErr.message}`);
+        } catch (openMeteoErr) {
+          console.warn("Open-Meteo failed, attempting fallback to NASA POWER:", openMeteoErr);
+          try {
+            showApiStatus(`Open-Meteo unavailable (${openMeteoErr.message}). Querying NASA POWER global reanalysis...`, "info");
+            const nasaResult = await fetchNasaPowerSeries(lat, lon, period);
+            steps = nasaResult.steps;
+            providerName = 'NASA POWER';
+            await WeatherCache.set(cacheId, steps, { lat, lon, period, source: providerName });
+          } catch (nasaErr) {
+            console.warn("NASA POWER failed, attempting offline cache fallback:", nasaErr);
+            const cached = await WeatherCache.get(cacheId);
+            if (cached && cached.steps && cached.steps.length > 0) {
+              steps = cached.steps;
+              fromLocalCache = true;
+              providerName = 'Offline Cache';
+              showApiStatus(`Weather APIs unavailable. Restored ${steps.length} hours from local offline cache.`, "offline");
+            } else {
+              // Self-contained Earth climatology generator fallback
+              showApiStatus(`APIs unreachable and no cache found. Synthesizing series using offline Earth climatology for (${lat.toFixed(2)}°, ${lon.toFixed(2)}°)...`, "offline");
+              const climResult = generateSynopticClimateSeries(lat, lon, period);
+              steps = climResult.steps;
+              providerName = 'Offline Climatology';
+              await WeatherCache.set(cacheId, steps, { lat, lon, period, source: providerName });
+            }
           }
         }
       }
 
-      if (!fromLocalCache) {
+      if (!fromLocalCache && period !== 'climatology') {
         showApiStatus(`Received ${steps.length} hours of weather data (${providerName}). Running FLake WebAssembly simulation...`, "");
       }
 
@@ -1407,6 +1531,11 @@
           UI.apiSourcePill.style.color = '#38bdf8';
           UI.apiSourcePill.style.background = 'rgba(56, 189, 248, 0.15)';
           UI.apiSourcePill.style.borderColor = 'rgba(56, 189, 248, 0.35)';
+        } else if (providerName === 'Offline Climatology') {
+          UI.apiSourcePill.textContent = 'Offline Climatology';
+          UI.apiSourcePill.style.color = '#c084fc';
+          UI.apiSourcePill.style.background = 'rgba(192, 132, 252, 0.15)';
+          UI.apiSourcePill.style.borderColor = 'rgba(192, 132, 252, 0.35)';
         } else {
           UI.apiSourcePill.textContent = 'Open-Meteo ERA5';
           UI.apiSourcePill.style.color = '#86efac';
