@@ -27,11 +27,12 @@
     qLw: null,               // auto
 
     // Forcing Mode & Dataset
-    forcingMode: 'manual',   // 'manual' | 'api'
+    forcingMode: 'manual',   // 'manual' | 'curated' | 'api' | 'custom'
     isDatasetMode: false,
     datasetSeries: [],
     datasetResults: [],
     datasetIndex: 0,
+    customParsedData: null,
 
     // Lake geometry
     lakeDepth: 12.0,
@@ -164,9 +165,11 @@
     tabForcingManual: document.getElementById('tab-forcing-manual'),
     tabForcingCurated: document.getElementById('tab-forcing-curated'),
     tabForcingApi: document.getElementById('tab-forcing-api'),
+    tabForcingCustom: document.getElementById('tab-forcing-custom'),
     panelForcingManual: document.getElementById('panel-forcing-manual'),
     panelForcingCurated: document.getElementById('panel-forcing-curated'),
     panelForcingApi: document.getElementById('panel-forcing-api'),
+    panelForcingCustom: document.getElementById('panel-forcing-custom'),
 
     // Curated Benchmark Lakes Controls
     curatedLakeSelect: document.getElementById('curated-lake-select'),
@@ -182,6 +185,21 @@
     btnLoadCurated: document.getElementById('btn-load-curated'),
     curatedStatusBox: document.getElementById('curated-status-box'),
     curatedStatusText: document.getElementById('curated-status-text'),
+
+    // Custom File Drag and Drop Controls
+    customDropZone: document.getElementById('custom-drop-zone'),
+    customFileInput: document.getElementById('custom-file-input'),
+    btnLoadSampleDat: document.getElementById('btn-load-sample-dat'),
+    customFileCard: document.getElementById('custom-file-card'),
+    customFileName: document.getElementById('custom-file-name'),
+    customFileBadge: document.getElementById('custom-file-badge'),
+    customRowsCount: document.getElementById('custom-rows-count'),
+    customFileSize: document.getElementById('custom-file-size'),
+    customStepDetected: document.getElementById('custom-step-detected'),
+    customTimestepSelect: document.getElementById('custom-timestep-select'),
+    btnRunCustom: document.getElementById('btn-run-custom'),
+    customStatusBox: document.getElementById('custom-status-box'),
+    customStatusText: document.getElementById('custom-status-text'),
 
     // API Controls
     apiLakePreset: document.getElementById('api-lake-preset'),
@@ -520,6 +538,348 @@
       showCuratedStatus(`Error: ${err.message}`, "error");
     } finally {
       if (UI.btnLoadCurated) UI.btnLoadCurated.disabled = false;
+    }
+  }
+
+  function showCustomStatus(msg, type = '') {
+    if (!UI.customStatusBox || !UI.customStatusText) return;
+    if (!msg) {
+      UI.customStatusBox.style.display = 'none';
+      return;
+    }
+    UI.customStatusBox.style.display = 'flex';
+    UI.customStatusBox.className = 'api-status-box' + (type ? ' ' + type : '');
+    UI.customStatusText.textContent = msg;
+  }
+
+  function parseMeteorologicalText(text, filename = '') {
+    const rawLines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0 && !l.startsWith('!') && !l.startsWith('#'));
+    if (rawLines.length === 0) {
+      throw new Error("File is empty or contains only comments.");
+    }
+
+    // Delimiter detection
+    const firstLine = rawLines[0];
+    let delimiter = /\s+/;
+    if (firstLine.includes(',') && !firstLine.includes('\t')) {
+      delimiter = ',';
+    } else if (firstLine.includes(';') && !firstLine.includes('\t')) {
+      delimiter = ';';
+    } else if (firstLine.includes('\t')) {
+      delimiter = '\t';
+    }
+
+    // Header detection
+    const hasLetters = /[a-zA-Z]/.test(firstLine);
+    let dataStartIdx = 0;
+    const headerIndices = {
+      step: -1,
+      solar: -1,
+      tair: -1,
+      vapor: -1,
+      rh: -1,
+      wind: -1,
+      cloud: -1,
+      snow: -1
+    };
+
+    if (hasLetters) {
+      dataStartIdx = 1;
+      const rawHeaderTokens = firstLine.split(delimiter).map(s => s.trim().toLowerCase());
+      rawHeaderTokens.forEach((tok, i) => {
+        if (tok.includes('step') || tok.includes('day') || tok === 'd' || tok === 'time' || tok === 'date') headerIndices.step = i;
+        else if (tok.includes('sol') || tok.includes('rad') || tok.includes('sw') || tok === 'i_atm') headerIndices.solar = i;
+        else if (tok.includes('temp') || tok.includes('tair') || tok === 't' || tok === 't2m' || tok === 't_air') headerIndices.tair = i;
+        else if (tok.includes('rh') || tok.includes('humid')) headerIndices.rh = i;
+        else if (tok.includes('vap') || tok.includes('ea') || tok.includes('e_a') || tok.includes('press')) headerIndices.vapor = i;
+        else if (tok.includes('wind') || tok.includes('wspd') || tok === 'u' || tok === 'u10' || tok === 'spd') headerIndices.wind = i;
+        else if (tok.includes('cloud') || tok.includes('cl') || tok === 'n') headerIndices.cloud = i;
+        else if (tok.includes('snow') || tok.includes('precip')) headerIndices.snow = i;
+      });
+    }
+
+    const steps = [];
+    const K = 273.15;
+    const sigma = 5.670374e-8;
+
+    for (let lineIdx = dataStartIdx; lineIdx < rawLines.length; lineIdx++) {
+      const rawTokens = rawLines[lineIdx].split(delimiter).map(s => s.trim()).filter(s => s.length > 0);
+      if (rawTokens.length < 4) continue;
+
+      let stepVal = lineIdx - dataStartIdx + 1;
+      let solar = 0;
+      let tair = 10;
+      let ea_hpa = 10;
+      let rh_pct = null;
+      let wind = 3;
+      let cloud = 0.5;
+      let snowRate = 0;
+
+      if (hasLetters && headerIndices.solar !== -1 && headerIndices.tair !== -1) {
+        if (headerIndices.step !== -1) stepVal = parseFloat(rawTokens[headerIndices.step]) || stepVal;
+        if (headerIndices.solar !== -1) solar = parseFloat(rawTokens[headerIndices.solar]) || 0;
+        if (headerIndices.tair !== -1) tair = parseFloat(rawTokens[headerIndices.tair]) || 0;
+        if (headerIndices.rh !== -1) rh_pct = parseFloat(rawTokens[headerIndices.rh]);
+        if (headerIndices.vapor !== -1) ea_hpa = parseFloat(rawTokens[headerIndices.vapor]);
+        if (headerIndices.wind !== -1) wind = parseFloat(rawTokens[headerIndices.wind]) || 2;
+        if (headerIndices.cloud !== -1) cloud = parseFloat(rawTokens[headerIndices.cloud]);
+        if (headerIndices.snow !== -1) snowRate = parseFloat(rawTokens[headerIndices.snow]) || 0;
+      } else {
+        const nums = rawTokens.map(Number);
+        if (nums.length >= 6) {
+          stepVal = nums[0];
+          solar = nums[1];
+          tair = nums[2];
+          ea_hpa = nums[3];
+          wind = nums[4];
+          cloud = nums[5];
+        } else if (nums.length === 5) {
+          solar = nums[0];
+          tair = nums[1];
+          ea_hpa = nums[2];
+          wind = nums[3];
+          cloud = nums[4];
+        } else if (nums.length === 4) {
+          solar = nums[0];
+          tair = nums[1];
+          wind = nums[2];
+          cloud = nums[3];
+        }
+      }
+
+      solar = Math.max(0, isNaN(solar) ? 0 : solar);
+      tair = isNaN(tair) ? 10.0 : tair;
+      wind = Math.max(0.2, isNaN(wind) ? 2.5 : wind);
+      cloud = Math.max(0.0, Math.min(1.0, isNaN(cloud) ? 0.5 : (cloud > 1.0 && cloud <= 10.0 ? cloud / 8.0 : (cloud > 10.0 ? cloud / 100.0 : cloud))));
+
+      let e_a_pa = 1000.0;
+      if (rh_pct != null && !isNaN(rh_pct)) {
+        const rh_frac = Math.max(0.05, Math.min(1.0, rh_pct > 1.0 ? rh_pct / 100.0 : rh_pct));
+        const e_sat = 611.2 * Math.exp((17.67 * tair) / (tair + 243.5));
+        e_a_pa = rh_frac * e_sat;
+      } else if (ea_hpa != null && !isNaN(ea_hpa)) {
+        e_a_pa = Math.max(50.0, ea_hpa * 100.0);
+      } else {
+        const e_sat = 611.2 * Math.exp((17.67 * tair) / (tair + 243.5));
+        e_a_pa = 0.70 * e_sat;
+      }
+
+      const q_air = (0.622 * e_a_pa) / (101325.0 - 0.378 * e_a_pa);
+      const T_k = tair + K;
+      const eps_clear = Math.min(0.85, 0.61 + 0.005 * Math.sqrt(Math.min(e_a_pa, 2000)));
+      const f_cloud = 1.0 + 0.22 * (cloud * cloud);
+      const Q_lw = eps_clear * f_cloud * sigma * Math.pow(T_k, 4);
+
+      const stepIdx = steps.length;
+      steps.push({
+        timeStr: `Record ${stepIdx + 1}`,
+        dateStr: `Record ${stepIdx + 1}`,
+        dayOfYear: (stepIdx % 365) + 1,
+        hourOfDay: 12,
+        T_air: tair,
+        solar: solar,
+        wind: wind,
+        Q_lw: Q_lw,
+        q_air: q_air,
+        snowRate: snowRate || 0.0,
+        del_time: 86400.0
+      });
+    }
+
+    if (steps.length === 0) {
+      throw new Error("No numerical forcing records parsed from file.");
+    }
+
+    let detectedFormat = "FLake 6-col .DAT";
+    if (hasLetters) detectedFormat = "CSV (with header)";
+    else if (firstLine.split(delimiter).length === 5) detectedFormat = "FLake 5-col .DAT";
+    else if (delimiter === ',') detectedFormat = "CSV";
+    else if (delimiter === '\t') detectedFormat = "TSV";
+
+    return {
+      steps,
+      detectedFormat,
+      rowCount: steps.length,
+      filename: filename || "uploaded_data.dat"
+    };
+  }
+
+  function handleCustomFileSelected(file) {
+    if (!file) return;
+    showCustomStatus(`Reading ${file.name} (${(file.size / 1024).toFixed(1)} KB)...`, "");
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target.result;
+        const parsed = parseMeteorologicalText(text, file.name);
+        state.customParsedData = parsed;
+
+        // Auto detect resolution
+        const isHourly = parsed.rowCount > 500;
+        const defaultDelTime = isHourly ? 3600 : 86400;
+        parsed.steps.forEach((s, idx) => {
+          s.del_time = defaultDelTime;
+          if (isHourly) {
+            s.hourOfDay = idx % 24;
+            s.dayOfYear = Math.floor(idx / 24) % 365 + 1;
+            s.timeStr = `Day ${s.dayOfYear}, ${s.hourOfDay}:00`;
+          } else {
+            s.hourOfDay = 12;
+            s.dayOfYear = (idx % 365) + 1;
+            s.timeStr = `Day ${s.dayOfYear}`;
+          }
+        });
+
+        // Update UI
+        if (UI.customFileName) UI.customFileName.textContent = file.name;
+        if (UI.customFileBadge) UI.customFileBadge.textContent = parsed.detectedFormat;
+        if (UI.customRowsCount) UI.customRowsCount.textContent = parsed.rowCount.toLocaleString();
+        if (UI.customFileSize) UI.customFileSize.textContent = `${(file.size / 1024).toFixed(1)} KB`;
+        if (UI.customStepDetected) UI.customStepDetected.textContent = isHourly ? 'Hourly (1h)' : 'Daily (24h)';
+        if (UI.customTimestepSelect) UI.customTimestepSelect.value = defaultDelTime.toString();
+        if (UI.customFileCard) UI.customFileCard.style.display = 'block';
+        if (UI.btnRunCustom) UI.btnRunCustom.disabled = false;
+
+        showCustomStatus(`Successfully parsed ${parsed.rowCount.toLocaleString()} records from ${file.name}. Ready to simulate.`, "success");
+      } catch (err) {
+        console.error("Custom file parse error:", err);
+        showCustomStatus(`Parse error: ${err.message}`, "error");
+        if (UI.btnRunCustom) UI.btnRunCustom.disabled = true;
+      }
+    };
+    reader.onerror = () => {
+      showCustomStatus("Failed to read file from disk.", "error");
+    };
+    reader.readAsText(file);
+  }
+
+  async function handleLoadSamplePotsdam() {
+    showCustomStatus("Fetching Potsdam80-96.dat sample dataset...", "");
+    const candidatePaths = [
+      'assets/test_run/Potsdam80-96.dat',
+      '../assets/test_run/Potsdam80-96.dat',
+      '_site/assets/test_run/Potsdam80-96.dat'
+    ];
+    let text = null;
+    let lastErr = null;
+    for (const p of candidatePaths) {
+      try {
+        const resp = await fetch(p);
+        if (resp.ok) {
+          text = await resp.text();
+          break;
+        }
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    if (!text) {
+      showCustomStatus("Could not load sample file: " + (lastErr ? lastErr.message : "Not found"), "error");
+      return;
+    }
+
+    try {
+      const parsed = parseMeteorologicalText(text, "Potsdam80-96.dat");
+      state.customParsedData = parsed;
+      parsed.steps.forEach((s, idx) => {
+        s.del_time = 86400.0;
+        s.hourOfDay = 12;
+        s.dayOfYear = (idx % 365) + 1;
+        s.timeStr = `Day ${idx + 1}`;
+      });
+
+      if (UI.customFileName) UI.customFileName.textContent = "Potsdam80-96.dat (Sample)";
+      if (UI.customFileBadge) UI.customFileBadge.textContent = parsed.detectedFormat;
+      if (UI.customRowsCount) UI.customRowsCount.textContent = parsed.rowCount.toLocaleString();
+      if (UI.customFileSize) UI.customFileSize.textContent = `${(text.length / 1024).toFixed(1)} KB`;
+      if (UI.customStepDetected) UI.customStepDetected.textContent = "Daily (24h)";
+      if (UI.customTimestepSelect) UI.customTimestepSelect.value = "86400";
+      if (UI.customFileCard) UI.customFileCard.style.display = 'block';
+      if (UI.btnRunCustom) UI.btnRunCustom.disabled = false;
+
+      showCustomStatus(`Loaded ${parsed.rowCount.toLocaleString()} records from Potsdam sample. Click Simulate below.`, "success");
+    } catch (err) {
+      showCustomStatus(`Sample error: ${err.message}`, "error");
+    }
+  }
+
+  function handleRunCustomSimulation() {
+    if (!state.customParsedData || !state.customParsedData.steps || state.customParsedData.steps.length === 0) {
+      showCustomStatus("No parsed file data available. Please select a file first.", "error");
+      return;
+    }
+
+    const parsed = state.customParsedData;
+    const selectedDelTime = parseFloat(UI.customTimestepSelect ? UI.customTimestepSelect.value : 86400);
+    parsed.steps.forEach(s => { s.del_time = selectedDelTime; });
+
+    if (UI.btnRunCustom) UI.btnRunCustom.disabled = true;
+    showCustomStatus(`Simulating ${parsed.rowCount.toLocaleString()} steps in FLake WebAssembly...`, "");
+
+    try {
+      const firstAirT = parsed.steps[0].T_air;
+      const isSubZero = firstAirT <= 0.0;
+      const initTsfc = Math.max(0.0, Math.min(firstAirT, 4.0));
+      const initState = {
+        Tsfc: initTsfc,
+        TwML: initTsfc,
+        Tbot: 4.0,
+        Tmnw: Math.min(initTsfc, 4.0),
+        hML: state.lakeDepth,
+        CT: 0.5,
+        hice: isSubZero ? 0.05 : 0.0,
+        Tice: isSubZero ? -1.0 : 0.0,
+        hsnow: 0.0,
+        Tsnow: 0.0
+      };
+
+      const lakeMorph = { depth: state.lakeDepth, fetch: 2000.0, extinWater: state.waterClarity };
+      const res = engine.runTimeSeries(parsed.steps, lakeMorph, initState);
+
+      state.isDatasetMode = true;
+      state.datasetSeries = parsed.steps;
+      state.datasetResults = res.history;
+      state.datasetIndex = 0;
+      state.history = res.history;
+
+      // Statistics
+      let minTsfc = 100, maxTsfc = -100;
+      let iceSteps = 0;
+      for (const h of res.history) {
+        if (h.Tsfc < minTsfc) minTsfc = h.Tsfc;
+        if (h.Tsfc > maxTsfc) maxTsfc = h.Tsfc;
+        if (h.hice > 0.001) iceSteps++;
+      }
+      const isDaily = selectedDelTime >= 43200;
+      const iceDays = isDaily ? iceSteps : Math.round(iceSteps / 24);
+
+      if (UI.statTsfcMin) UI.statTsfcMin.textContent = `${minTsfc.toFixed(1)} °C`;
+      if (UI.statTsfcMax) UI.statTsfcMax.textContent = `${maxTsfc.toFixed(1)} °C`;
+      if (UI.statIceDays) UI.statIceDays.textContent = `${iceDays} d`;
+      if (UI.statSimTime) UI.statSimTime.textContent = `${res.elapsedMs.toFixed(1)} ms`;
+
+      if (UI.apiScrubber) {
+        UI.apiScrubber.max = parsed.steps.length - 1;
+        UI.apiScrubber.value = 0;
+      }
+      if (UI.apiPlaybackBox) {
+        UI.apiPlaybackBox.style.display = 'flex';
+      }
+
+      showCustomStatus(`Simulation complete! Processed ${parsed.rowCount.toLocaleString()} timesteps in ${res.elapsedMs.toFixed(1)} ms.`, "success");
+
+      // Pause continuous loop and show step 0
+      state.isRunning = false;
+      if (UI.btnPlay) UI.btnPlay.textContent = 'Run';
+      if (UI.clockDot) UI.clockDot.className = 'clock-dot paused';
+
+      applyDatasetStep(0);
+    } catch (err) {
+      console.error("Custom simulation error:", err);
+      showCustomStatus(`Simulation error: ${err.message}`, "error");
+    } finally {
+      if (UI.btnRunCustom) UI.btnRunCustom.disabled = false;
     }
   }
 
@@ -1378,9 +1738,11 @@
       UI.tabForcingManual.classList.add('active');
       if (UI.tabForcingCurated) UI.tabForcingCurated.classList.remove('active');
       if (UI.tabForcingApi) UI.tabForcingApi.classList.remove('active');
+      if (UI.tabForcingCustom) UI.tabForcingCustom.classList.remove('active');
       UI.panelForcingManual.style.display = 'block';
       if (UI.panelForcingCurated) UI.panelForcingCurated.style.display = 'none';
       if (UI.panelForcingApi) UI.panelForcingApi.style.display = 'none';
+      if (UI.panelForcingCustom) UI.panelForcingCustom.style.display = 'none';
     }
 
     document.querySelectorAll('.preset-chip').forEach(el => el.classList.remove('active'));
@@ -1707,30 +2069,36 @@
     });
 
     // Forcing Mode switching
-    if (UI.tabForcingManual && UI.tabForcingCurated && UI.tabForcingApi) {
+    if (UI.tabForcingManual) {
       UI.tabForcingManual.addEventListener('click', () => {
         state.forcingMode = 'manual';
         state.isDatasetMode = false;
         UI.tabForcingManual.classList.add('active');
-        UI.tabForcingCurated.classList.remove('active');
-        UI.tabForcingApi.classList.remove('active');
+        if (UI.tabForcingCurated) UI.tabForcingCurated.classList.remove('active');
+        if (UI.tabForcingApi) UI.tabForcingApi.classList.remove('active');
+        if (UI.tabForcingCustom) UI.tabForcingCustom.classList.remove('active');
         UI.panelForcingManual.style.display = 'block';
-        UI.panelForcingCurated.style.display = 'none';
-        UI.panelForcingApi.style.display = 'none';
+        if (UI.panelForcingCurated) UI.panelForcingCurated.style.display = 'none';
+        if (UI.panelForcingApi) UI.panelForcingApi.style.display = 'none';
+        if (UI.panelForcingCustom) UI.panelForcingCustom.style.display = 'none';
         if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'none';
         state.isRunning = true;
         UI.btnPlay.textContent = 'Pause';
         UI.clockDot.className = 'clock-dot';
       });
+    }
 
+    if (UI.tabForcingCurated) {
       UI.tabForcingCurated.addEventListener('click', () => {
         state.forcingMode = 'curated';
         UI.tabForcingCurated.classList.add('active');
-        UI.tabForcingManual.classList.remove('active');
-        UI.tabForcingApi.classList.remove('active');
+        if (UI.tabForcingManual) UI.tabForcingManual.classList.remove('active');
+        if (UI.tabForcingApi) UI.tabForcingApi.classList.remove('active');
+        if (UI.tabForcingCustom) UI.tabForcingCustom.classList.remove('active');
         UI.panelForcingCurated.style.display = 'block';
-        UI.panelForcingManual.style.display = 'none';
-        UI.panelForcingApi.style.display = 'none';
+        if (UI.panelForcingManual) UI.panelForcingManual.style.display = 'none';
+        if (UI.panelForcingApi) UI.panelForcingApi.style.display = 'none';
+        if (UI.panelForcingCustom) UI.panelForcingCustom.style.display = 'none';
         if (state.datasetResults && state.datasetResults.length > 0) {
           state.isDatasetMode = true;
           if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'flex';
@@ -1740,15 +2108,41 @@
           UI.clockDot.className = 'clock-dot paused';
         }
       });
+    }
 
+    if (UI.tabForcingApi) {
       UI.tabForcingApi.addEventListener('click', () => {
         state.forcingMode = 'api';
         UI.tabForcingApi.classList.add('active');
-        UI.tabForcingManual.classList.remove('active');
-        UI.tabForcingCurated.classList.remove('active');
+        if (UI.tabForcingManual) UI.tabForcingManual.classList.remove('active');
+        if (UI.tabForcingCurated) UI.tabForcingCurated.classList.remove('active');
+        if (UI.tabForcingCustom) UI.tabForcingCustom.classList.remove('active');
         UI.panelForcingApi.style.display = 'block';
-        UI.panelForcingManual.style.display = 'none';
-        UI.panelForcingCurated.style.display = 'none';
+        if (UI.panelForcingManual) UI.panelForcingManual.style.display = 'none';
+        if (UI.panelForcingCurated) UI.panelForcingCurated.style.display = 'none';
+        if (UI.panelForcingCustom) UI.panelForcingCustom.style.display = 'none';
+        if (state.datasetResults && state.datasetResults.length > 0) {
+          state.isDatasetMode = true;
+          if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'flex';
+        } else {
+          state.isRunning = false;
+          UI.btnPlay.textContent = 'Run';
+          UI.clockDot.className = 'clock-dot paused';
+        }
+      });
+    }
+
+    if (UI.tabForcingCustom) {
+      UI.tabForcingCustom.addEventListener('click', () => {
+        state.forcingMode = 'custom';
+        UI.tabForcingCustom.classList.add('active');
+        if (UI.tabForcingManual) UI.tabForcingManual.classList.remove('active');
+        if (UI.tabForcingCurated) UI.tabForcingCurated.classList.remove('active');
+        if (UI.tabForcingApi) UI.tabForcingApi.classList.remove('active');
+        UI.panelForcingCustom.style.display = 'block';
+        if (UI.panelForcingManual) UI.panelForcingManual.style.display = 'none';
+        if (UI.panelForcingCurated) UI.panelForcingCurated.style.display = 'none';
+        if (UI.panelForcingApi) UI.panelForcingApi.style.display = 'none';
         if (state.datasetResults && state.datasetResults.length > 0) {
           state.isDatasetMode = true;
           if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'flex';
@@ -1770,6 +2164,84 @@
     // Curated Lake load button
     if (UI.btnLoadCurated) {
       UI.btnLoadCurated.addEventListener('click', handleLoadCuratedLake);
+    }
+
+    // Custom File Drag and Drop events
+    if (UI.customDropZone) {
+      ['dragenter', 'dragover'].forEach(eventName => {
+        UI.customDropZone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          UI.customDropZone.classList.add('dragover');
+        });
+      });
+
+      ['dragleave', 'drop'].forEach(eventName => {
+        UI.customDropZone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          UI.customDropZone.classList.remove('dragover');
+        });
+      });
+
+      UI.customDropZone.addEventListener('drop', (e) => {
+        const files = e.dataTransfer.files;
+        if (files && files.length > 0) {
+          handleCustomFileSelected(files[0]);
+        }
+      });
+
+      UI.customDropZone.addEventListener('click', () => {
+        if (UI.customFileInput) UI.customFileInput.click();
+      });
+
+      UI.customDropZone.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          if (UI.customFileInput) UI.customFileInput.click();
+        }
+      });
+    }
+
+    if (UI.customFileInput) {
+      UI.customFileInput.addEventListener('change', (e) => {
+        const files = e.target.files;
+        if (files && files.length > 0) {
+          handleCustomFileSelected(files[0]);
+        }
+      });
+    }
+
+    if (UI.btnLoadSampleDat) {
+      UI.btnLoadSampleDat.addEventListener('click', handleLoadSamplePotsdam);
+    }
+
+    if (UI.btnRunCustom) {
+      UI.btnRunCustom.addEventListener('click', handleRunCustomSimulation);
+    }
+
+    if (UI.customTimestepSelect) {
+      UI.customTimestepSelect.addEventListener('change', (e) => {
+        const delTime = parseFloat(e.target.value);
+        if (state.customParsedData && state.customParsedData.steps) {
+          const isHourly = delTime === 3600;
+          state.customParsedData.steps.forEach((s, idx) => {
+            s.del_time = delTime;
+            if (isHourly) {
+              s.hourOfDay = idx % 24;
+              s.dayOfYear = Math.floor(idx / 24) % 365 + 1;
+              s.timeStr = `Day ${s.dayOfYear}, ${s.hourOfDay}:00`;
+            } else {
+              s.hourOfDay = 12;
+              s.dayOfYear = (idx % 365) + 1;
+              s.timeStr = `Day ${idx + 1}`;
+            }
+          });
+          if (UI.customStepDetected) {
+            UI.customStepDetected.textContent = isHourly ? 'Hourly (1h)' : 'Daily (24h)';
+          }
+        }
+      });
     }
 
     // Lake Preset Dropdown in API mode

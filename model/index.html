@@ -193,13 +193,16 @@
             <!-- Forcing Mode Tabs -->
             <div class="forcing-tabs">
               <button type="button" id="tab-forcing-manual" class="forcing-tab active" title="Use manual sliders and diurnal/seasonal oscillations">
-                Manual Sliders
+                Manual
               </button>
               <button type="button" id="tab-forcing-curated" class="forcing-tab" title="Load verified benchmark lake datasets (offline, published data)">
-                Curated Lakes
+                Curated
               </button>
               <button type="button" id="tab-forcing-api" class="forcing-tab" title="Fetch live or historical ERA5 reanalysis weather data via Open-Meteo">
                 Weather API
+              </button>
+              <button type="button" id="tab-forcing-custom" class="forcing-tab" title="Drag and drop or upload custom .dat or .csv meteorological data">
+                Custom File
               </button>
             </div>
 
@@ -352,6 +355,62 @@
               <!-- Status Feedback Banner -->
               <div id="api-status-box" class="api-status-box" style="display: none;">
                 <span id="api-status-text">Ready to fetch</span>
+              </div>
+            </div>
+
+            <!-- PANEL D: Custom File Drag-and-Drop Upload -->
+            <div id="panel-forcing-custom" style="display: none;">
+              <!-- Drop Zone -->
+              <div id="custom-drop-zone" class="drop-zone" tabindex="0" role="button" aria-label="Drop meteorological forcing file here or click to browse">
+                <div class="drop-zone-icon-box">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                  </svg>
+                </div>
+                <p class="drop-zone-text">Drop Meteorological File</p>
+                <p class="drop-zone-sub">or click to browse local files</p>
+                <span class="drop-zone-badge">FLake .DAT / CSV / TSV</span>
+                <input type="file" id="custom-file-input" accept=".dat,.csv,.txt,.tsv" style="display: none;">
+              </div>
+
+              <!-- Quick Sample Loader -->
+              <div style="margin-top: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 0.72rem; color: var(--text-muted);">Need test data?</span>
+                <button type="button" id="btn-load-sample-dat" class="btn btn-secondary" style="font-size: 0.72rem; padding: 0.2rem 0.55rem;">
+                  Load Potsdam80-96 Sample
+                </button>
+              </div>
+
+              <!-- Parsed File Details Card -->
+              <div id="custom-file-card" class="file-preview-card" style="display: none;">
+                <div class="file-preview-header">
+                  <span id="custom-file-name" style="word-break: break-all;">filename.dat</span>
+                  <span id="custom-file-badge" style="font-size: 0.68rem; background: #0284c7; color: #fff; padding: 2px 6px; border-radius: 4px;">6-col DAT</span>
+                </div>
+                <div class="lake-meta-chips">
+                  <span class="lake-chip">Records: <b id="custom-rows-count">0</b></span>
+                  <span class="lake-chip">Size: <b id="custom-file-size">0 KB</b></span>
+                  <span class="lake-chip">Format: <b id="custom-step-detected">Daily (24h)</b></span>
+                </div>
+                <div class="control-group" style="margin-top: 0.35rem;">
+                  <div class="control-label-row">
+                    <span class="control-label" style="font-size: 0.72rem;">Timestep Resolution</span>
+                  </div>
+                  <select id="custom-timestep-select" class="speed-select" style="width: 100%; font-size: 0.76rem;">
+                    <option value="86400">Daily Step (86,400 s / 24 hours)</option>
+                    <option value="3600">Hourly Step (3,600 s / 1 hour)</option>
+                  </select>
+                </div>
+              </div>
+
+              <button type="button" id="btn-run-custom" class="btn btn-primary" style="width: 100%; margin-top: 0.75rem;" disabled>
+                Simulate With Uploaded File
+              </button>
+
+              <div id="custom-status-box" class="api-status-box" style="display: none;">
+                <span id="custom-status-text">Ready</span>
               </div>
             </div>
 
