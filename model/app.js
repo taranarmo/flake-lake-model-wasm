@@ -47,6 +47,83 @@
 
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const DAYS_IN_MONTHS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  const CURATED_BENCHMARKS = {
+    heiligensee: {
+      id: 'heiligensee',
+      name: 'Heiligensee',
+      location: 'Berlin, Germany',
+      regime: 'Polymictic (Shallow)',
+      regimeShort: 'Polymictic',
+      regimeColor: '#0284c7',
+      depth: 4.5,
+      fetch: 2000,
+      clarity: 1.5,
+      lat: 52.6,
+      description: 'Small polymictic urban lake in Berlin with frequent mixing and winter ice cover.',
+      source: 'DWD Potsdam Station (1980)',
+      file: 'heiligensee.json'
+    },
+    mueggelsee: {
+      id: 'mueggelsee',
+      name: 'Müggelsee',
+      location: 'Berlin, Germany',
+      regime: 'Polymictic (Shallow)',
+      regimeShort: 'Polymictic',
+      regimeColor: '#0284c7',
+      depth: 4.9,
+      fetch: 2500,
+      clarity: 1.2,
+      lat: 52.43,
+      description: "Berlin's largest lake: shallow, wind-exposed polymictic basin with intermittent stratification.",
+      source: 'DWD Potsdam Station (1980)',
+      file: 'mueggelsee.json'
+    },
+    stechlin: {
+      id: 'stechlin',
+      name: 'Stechlinsee',
+      location: 'Brandenburg, Germany',
+      regime: 'Dimictic (Deep, Stratified)',
+      regimeShort: 'Dimictic',
+      regimeColor: '#7c3aed',
+      depth: 22.8,
+      fetch: 4000,
+      clarity: 0.3,
+      lat: 53.15,
+      description: 'Deep oligotrophic clear-water lake with strong summer thermal stratification and hypolimnion near 4°C.',
+      source: 'IGB Stechlin Station (1994)',
+      file: 'stechlin.json'
+    },
+    geneva: {
+      id: 'geneva',
+      name: 'Lake Geneva / Lac Léman',
+      location: 'Switzerland / France',
+      regime: 'Warm Monomictic (Deep Sub-Alpine)',
+      regimeShort: 'Monomictic',
+      regimeColor: '#d97706',
+      depth: 40.0,
+      fetch: 15000,
+      clarity: 0.4,
+      lat: 46.45,
+      description: 'Deep sub-alpine lake that stratifies intensely in summer and mixes only in winter without freezing.',
+      source: 'ERA5 Reanalysis (2024)',
+      file: 'geneva.json'
+    },
+    baikal: {
+      id: 'baikal',
+      name: 'Lake Baikal',
+      location: 'Siberia, Russia',
+      regime: 'Cold Dimictic / Ice-Covered (Rift Lake)',
+      regimeShort: 'Cold / Ice',
+      regimeColor: '#0891b2',
+      depth: 50.0,
+      fetch: 25000,
+      clarity: 0.2,
+      lat: 53.5,
+      description: "World's deepest freshwater rift lake, featuring prolonged seasonal ice cover and pronounced winter inverse stratification.",
+      source: 'ERA5 Reanalysis (2024)',
+      file: 'baikal.json'
+    }
+  };
 
   const LAKE_PRESETS = {
     mueggelsee: { name: 'Müggelsee, Berlin', lat: 52.43, lon: 13.63, depth: 4.9, clarity: 1.2 },
@@ -85,9 +162,26 @@
 
     // Forcing Mode Tabs & Panels
     tabForcingManual: document.getElementById('tab-forcing-manual'),
+    tabForcingCurated: document.getElementById('tab-forcing-curated'),
     tabForcingApi: document.getElementById('tab-forcing-api'),
     panelForcingManual: document.getElementById('panel-forcing-manual'),
+    panelForcingCurated: document.getElementById('panel-forcing-curated'),
     panelForcingApi: document.getElementById('panel-forcing-api'),
+
+    // Curated Benchmark Lakes Controls
+    curatedLakeSelect: document.getElementById('curated-lake-select'),
+    curatedLakeCard: document.getElementById('curated-lake-card'),
+    curatedName: document.getElementById('curated-name'),
+    curatedRegimePill: document.getElementById('curated-regime-pill'),
+    curatedDepth: document.getElementById('curated-depth'),
+    curatedFetch: document.getElementById('curated-fetch'),
+    curatedClarity: document.getElementById('curated-clarity'),
+    curatedLat: document.getElementById('curated-lat'),
+    curatedDesc: document.getElementById('curated-desc'),
+    curatedSource: document.getElementById('curated-source'),
+    btnLoadCurated: document.getElementById('btn-load-curated'),
+    curatedStatusBox: document.getElementById('curated-status-box'),
+    curatedStatusText: document.getElementById('curated-status-text'),
 
     // API Controls
     apiLakePreset: document.getElementById('api-lake-preset'),
@@ -280,6 +374,153 @@
     }
 
     updateTelemetry(res, forcing);
+  }
+
+  function showCuratedStatus(msg, type = '') {
+    if (!UI.curatedStatusBox || !UI.curatedStatusText) return;
+    if (!msg) {
+      UI.curatedStatusBox.style.display = 'none';
+      return;
+    }
+    UI.curatedStatusBox.style.display = 'flex';
+    UI.curatedStatusBox.className = 'api-status-box' + (type ? ' ' + type : '');
+    UI.curatedStatusText.textContent = msg;
+  }
+
+  function updateCuratedLakeCard(lakeKey) {
+    const info = CURATED_BENCHMARKS[lakeKey];
+    if (!info) return;
+    if (UI.curatedName) UI.curatedName.textContent = info.name;
+    if (UI.curatedRegimePill) {
+      UI.curatedRegimePill.textContent = info.regimeShort;
+      UI.curatedRegimePill.style.background = info.regimeColor || '#0284c7';
+    }
+    if (UI.curatedDepth) UI.curatedDepth.textContent = `${info.depth.toFixed(1)} m`;
+    if (UI.curatedFetch) UI.curatedFetch.textContent = `${Math.round(info.fetch)} m`;
+    if (UI.curatedClarity) UI.curatedClarity.textContent = `${info.clarity.toFixed(1)} m⁻¹`;
+    if (UI.curatedLat) UI.curatedLat.textContent = `${info.lat.toFixed(2)}°N`;
+    if (UI.curatedDesc) UI.curatedDesc.textContent = info.description;
+    if (UI.curatedSource) UI.curatedSource.textContent = `Source: ${info.source}`;
+  }
+
+  async function fetchCuratedLake(lakeKey) {
+    const info = CURATED_BENCHMARKS[lakeKey];
+    if (!info) throw new Error("Unknown curated lake: " + lakeKey);
+    const candidatePaths = [
+      `data/lakes/${info.file}`,
+      `assets/data/lakes/${info.file}`,
+      `model/data/lakes/${info.file}`
+    ];
+    let data = null;
+    let lastErr = null;
+    for (const p of candidatePaths) {
+      try {
+        const resp = await fetch(p);
+        if (resp.ok) {
+          data = await resp.json();
+          break;
+        }
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    if (!data) {
+      throw new Error(lastErr ? lastErr.message : `Failed to load benchmark dataset for ${info.name}`);
+    }
+    return data;
+  }
+
+  async function handleLoadCuratedLake() {
+    const lakeKey = UI.curatedLakeSelect ? UI.curatedLakeSelect.value : 'heiligensee';
+    const lake = CURATED_BENCHMARKS[lakeKey];
+    if (!lake) return;
+
+    if (UI.btnLoadCurated) UI.btnLoadCurated.disabled = true;
+    showCuratedStatus(`Loading verified benchmark dataset for ${lake.name}...`, "");
+
+    try {
+      const dataset = await fetchCuratedLake(lakeKey);
+      if (!dataset.steps || dataset.steps.length === 0) {
+        throw new Error("Benchmark dataset contains no time steps.");
+      }
+
+      showCuratedStatus(`Running FLake WebAssembly simulation across ${dataset.steps.length} timesteps...`, "");
+
+      // Sync lake parameters to sidebar
+      state.lakeDepth = lake.depth;
+      state.waterClarity = lake.clarity;
+      if (UI.sliderDepth) {
+        UI.sliderDepth.value = lake.depth;
+        UI.valDepth.textContent = `${lake.depth.toFixed(1)} m`;
+      }
+      if (UI.selectClarity) {
+        UI.selectClarity.value = lake.clarity.toString();
+      }
+
+      // Initial conditions on Day 1 (January winter state)
+      const firstAirT = dataset.steps[0].T_air;
+      const isSubZero = firstAirT <= 0.0;
+      const initTsfc = Math.max(0.0, Math.min(firstAirT, 4.0));
+      const initState = {
+        Tsfc: initTsfc,
+        TwML: initTsfc,
+        Tbot: 4.0,
+        Tmnw: Math.min(initTsfc, 4.0),
+        hML: lake.depth,
+        CT: 0.5,
+        hice: isSubZero ? 0.05 : 0.0,
+        Tice: isSubZero ? -1.0 : 0.0,
+        hsnow: 0.0,
+        Tsnow: 0.0
+      };
+
+      const lakeMorph = { depth: lake.depth, fetch: lake.fetch, extinWater: lake.clarity };
+      const res = engine.runTimeSeries(dataset.steps, lakeMorph, initState);
+
+      state.isDatasetMode = true;
+      state.datasetSeries = dataset.steps;
+      state.datasetResults = res.history;
+      state.datasetIndex = 0;
+      state.history = res.history;
+
+      // Statistics
+      let minTsfc = 100, maxTsfc = -100;
+      let iceSteps = 0;
+      for (const h of res.history) {
+        if (h.Tsfc < minTsfc) minTsfc = h.Tsfc;
+        if (h.Tsfc > maxTsfc) maxTsfc = h.Tsfc;
+        if (h.hice > 0.001) iceSteps++;
+      }
+      const isDaily = (dataset.timeStepSec || 86400) >= 43200;
+      const iceDays = isDaily ? iceSteps : Math.round(iceSteps / 24);
+
+      if (UI.statTsfcMin) UI.statTsfcMin.textContent = `${minTsfc.toFixed(1)} °C`;
+      if (UI.statTsfcMax) UI.statTsfcMax.textContent = `${maxTsfc.toFixed(1)} °C`;
+      if (UI.statIceDays) UI.statIceDays.textContent = `${iceDays} d`;
+      if (UI.statSimTime) UI.statSimTime.textContent = `${res.elapsedMs.toFixed(1)} ms`;
+
+      if (UI.apiScrubber) {
+        UI.apiScrubber.max = dataset.steps.length - 1;
+        UI.apiScrubber.value = 0;
+      }
+      if (UI.apiPlaybackBox) {
+        UI.apiPlaybackBox.style.display = 'flex';
+      }
+
+      showCuratedStatus(`Completed ${dataset.steps.length} timesteps in ${res.elapsedMs.toFixed(1)} ms (${lake.name})`, "success");
+
+      // Pause continuous generator loop and show initial step
+      state.isRunning = false;
+      if (UI.btnPlay) UI.btnPlay.textContent = 'Run';
+      if (UI.clockDot) UI.clockDot.className = 'clock-dot paused';
+
+      applyDatasetStep(0);
+    } catch (err) {
+      console.error("Failed to load curated lake benchmark:", err);
+      showCuratedStatus(`Error: ${err.message}`, "error");
+    } finally {
+      if (UI.btnLoadCurated) UI.btnLoadCurated.disabled = false;
+    }
   }
 
   function showApiStatus(msg, type = '') {
@@ -475,7 +716,7 @@
 
     updateTelemetry(res, forcing);
     renderLakeColumn();
-    renderVerticalProfile();
+    renderProfilePlot();
     renderHistoryChart();
   }
 
@@ -1135,9 +1376,11 @@
     if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'none';
     if (UI.tabForcingManual) {
       UI.tabForcingManual.classList.add('active');
-      UI.tabForcingApi.classList.remove('active');
+      if (UI.tabForcingCurated) UI.tabForcingCurated.classList.remove('active');
+      if (UI.tabForcingApi) UI.tabForcingApi.classList.remove('active');
       UI.panelForcingManual.style.display = 'block';
-      UI.panelForcingApi.style.display = 'none';
+      if (UI.panelForcingCurated) UI.panelForcingCurated.style.display = 'none';
+      if (UI.panelForcingApi) UI.panelForcingApi.style.display = 'none';
     }
 
     document.querySelectorAll('.preset-chip').forEach(el => el.classList.remove('active'));
@@ -1464,13 +1707,15 @@
     });
 
     // Forcing Mode switching
-    if (UI.tabForcingManual && UI.tabForcingApi) {
+    if (UI.tabForcingManual && UI.tabForcingCurated && UI.tabForcingApi) {
       UI.tabForcingManual.addEventListener('click', () => {
         state.forcingMode = 'manual';
         state.isDatasetMode = false;
         UI.tabForcingManual.classList.add('active');
+        UI.tabForcingCurated.classList.remove('active');
         UI.tabForcingApi.classList.remove('active');
         UI.panelForcingManual.style.display = 'block';
+        UI.panelForcingCurated.style.display = 'none';
         UI.panelForcingApi.style.display = 'none';
         if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'none';
         state.isRunning = true;
@@ -1478,12 +1723,14 @@
         UI.clockDot.className = 'clock-dot';
       });
 
-      UI.tabForcingApi.addEventListener('click', () => {
-        state.forcingMode = 'api';
-        UI.tabForcingApi.classList.add('active');
+      UI.tabForcingCurated.addEventListener('click', () => {
+        state.forcingMode = 'curated';
+        UI.tabForcingCurated.classList.add('active');
         UI.tabForcingManual.classList.remove('active');
-        UI.panelForcingApi.style.display = 'block';
+        UI.tabForcingApi.classList.remove('active');
+        UI.panelForcingCurated.style.display = 'block';
         UI.panelForcingManual.style.display = 'none';
+        UI.panelForcingApi.style.display = 'none';
         if (state.datasetResults && state.datasetResults.length > 0) {
           state.isDatasetMode = true;
           if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'flex';
@@ -1493,6 +1740,36 @@
           UI.clockDot.className = 'clock-dot paused';
         }
       });
+
+      UI.tabForcingApi.addEventListener('click', () => {
+        state.forcingMode = 'api';
+        UI.tabForcingApi.classList.add('active');
+        UI.tabForcingManual.classList.remove('active');
+        UI.tabForcingCurated.classList.remove('active');
+        UI.panelForcingApi.style.display = 'block';
+        UI.panelForcingManual.style.display = 'none';
+        UI.panelForcingCurated.style.display = 'none';
+        if (state.datasetResults && state.datasetResults.length > 0) {
+          state.isDatasetMode = true;
+          if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'flex';
+        } else {
+          state.isRunning = false;
+          UI.btnPlay.textContent = 'Run';
+          UI.clockDot.className = 'clock-dot paused';
+        }
+      });
+    }
+
+    // Curated Lake select change
+    if (UI.curatedLakeSelect) {
+      UI.curatedLakeSelect.addEventListener('change', (e) => {
+        updateCuratedLakeCard(e.target.value);
+      });
+    }
+
+    // Curated Lake load button
+    if (UI.btnLoadCurated) {
+      UI.btnLoadCurated.addEventListener('click', handleLoadCuratedLake);
     }
 
     // Lake Preset Dropdown in API mode
@@ -1656,6 +1933,7 @@
       UI.clockText.textContent = 'FLake WASM Ready';
 
       setupEventListeners();
+      updateCuratedLakeCard('heiligensee');
       applyPreset('summer');
 
       requestAnimationFrame(animationLoop);

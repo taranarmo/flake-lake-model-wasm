@@ -685,6 +685,63 @@ main {
   color: var(--text-main);
 }
 
+/* Curated Lake Info Card */
+.lake-info-card {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem;
+  margin-top: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.lake-info-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.lake-meta-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.2rem 0;
+}
+
+.lake-chip {
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  padding: 0.15rem 0.45rem;
+  color: #93c5fd;
+}
+
+.lake-chip b {
+  color: #f3f4f6;
+}
+
+.lake-desc-text {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.lake-source-tag {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-style: italic;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 0.35rem;
+  margin-top: 0.2rem;
+}
+
 /* Regime Banner */
 .regime-banner {
   border-radius: var(--radius-md);

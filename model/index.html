@@ -195,8 +195,11 @@
               <button type="button" id="tab-forcing-manual" class="forcing-tab active" title="Use manual sliders and diurnal/seasonal oscillations">
                 Manual Sliders
               </button>
+              <button type="button" id="tab-forcing-curated" class="forcing-tab" title="Load verified benchmark lake datasets (offline, published data)">
+                Curated Lakes
+              </button>
               <button type="button" id="tab-forcing-api" class="forcing-tab" title="Fetch live or historical ERA5 reanalysis weather data via Open-Meteo">
-                Open-Meteo API
+                Weather API
               </button>
             </div>
 
@@ -247,7 +250,51 @@
               </div>
             </div>
 
-            <!-- PANEL B: Open-Meteo API -->
+            <!-- PANEL B: Curated Lakes (Offline Benchmarks) -->
+            <div id="panel-forcing-curated" style="display: none;">
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span class="control-label">Select Benchmark Lake</span>
+                </div>
+                <select id="curated-lake-select" class="api-select">
+                  <option value="heiligensee" selected>Heiligensee (Berlin) - Polymictic (4.5m)</option>
+                  <option value="mueggelsee">Müggelsee (Berlin) - Polymictic (4.9m)</option>
+                  <option value="stechlin">Stechlinsee (Brandenburg) - Dimictic (22.8m)</option>
+                  <option value="geneva">Lake Geneva / Léman - Monomictic (40.0m)</option>
+                  <option value="baikal">Lake Baikal (Siberia) - Cold / Ice (50.0m)</option>
+                </select>
+              </div>
+
+              <!-- Lake Details Card -->
+              <div id="curated-lake-card" class="lake-info-card">
+                <div class="lake-info-title">
+                  <span id="curated-name">Heiligensee</span>
+                  <span id="curated-regime-pill" style="font-size: 0.7rem; background: #0284c7; color: #fff; padding: 2px 6px; border-radius: 4px;">Polymictic</span>
+                </div>
+                <div class="lake-meta-chips">
+                  <span class="lake-chip">Depth: <b id="curated-depth">4.5 m</b></span>
+                  <span class="lake-chip">Fetch: <b id="curated-fetch">2000 m</b></span>
+                  <span class="lake-chip">κ: <b id="curated-clarity">1.5 m⁻¹</b></span>
+                  <span class="lake-chip">Lat: <b id="curated-lat">52.60°N</b></span>
+                </div>
+                <div id="curated-desc" class="lake-desc-text">
+                  Small polymictic urban lake in Berlin with frequent mixing and winter ice cover.
+                </div>
+                <div id="curated-source" class="lake-source-tag">
+                  Source: DWD Potsdam Station (1980)
+                </div>
+              </div>
+
+              <button type="button" id="btn-load-curated" class="btn btn-primary" style="width: 100%; margin-top: 0.75rem;">
+                Load & Simulate Lake
+              </button>
+
+              <div id="curated-status-box" class="api-status-box" style="display: none;">
+                <span id="curated-status-text">Ready</span>
+              </div>
+            </div>
+
+            <!-- PANEL C: Open-Meteo API -->
             <div id="panel-forcing-api" style="display: none;">
               <!-- Location Presets / Custom -->
               <div class="control-group">
@@ -306,20 +353,20 @@
               <div id="api-status-box" class="api-status-box" style="display: none;">
                 <span id="api-status-text">Ready to fetch</span>
               </div>
+            </div>
 
-              <!-- Playback & Scrubber Controls (shown when dataset loaded) -->
-              <div id="api-playback-box" class="api-playback-box" style="display: none;">
-                <div class="api-scrub-header">
-                  <span style="font-weight: 600; color: var(--text-main);">Playback Scrubber</span>
-                  <span id="api-time-pill" class="api-time-pill">Hour 0</span>
-                </div>
-                <input type="range" id="api-scrubber" class="slider-input" min="0" max="100" value="0">
-                <div class="api-stats-row">
-                  <span class="api-stat-tag">T_sfc Min: <b id="stat-tsfc-min">--</b></span>
-                  <span class="api-stat-tag">T_sfc Max: <b id="stat-tsfc-max">--</b></span>
-                  <span class="api-stat-tag">Ice Days: <b id="stat-ice-days">0</b></span>
-                  <span class="api-stat-tag">Sim Time: <b id="stat-sim-time">--</b></span>
-                </div>
+            <!-- Playback & Scrubber Controls (shown when dataset loaded) -->
+            <div id="api-playback-box" class="api-playback-box" style="display: none;">
+              <div class="api-scrub-header">
+                <span style="font-weight: 600; color: var(--text-main);">Playback Scrubber</span>
+                <span id="api-time-pill" class="api-time-pill">Hour 0</span>
+              </div>
+              <input type="range" id="api-scrubber" class="slider-input" min="0" max="100" value="0">
+              <div class="api-stats-row">
+                <span class="api-stat-tag">T_sfc Min: <b id="stat-tsfc-min">--</b></span>
+                <span class="api-stat-tag">T_sfc Max: <b id="stat-tsfc-max">--</b></span>
+                <span class="api-stat-tag">Ice Days: <b id="stat-ice-days">0</b></span>
+                <span class="api-stat-tag">Sim Time: <b id="stat-sim-time">--</b></span>
               </div>
             </div>
           </div>
