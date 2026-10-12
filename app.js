@@ -1313,21 +1313,23 @@
 
     // Number of days to simulate
     let totalDays = 365;
-    let startDayOfYear = 1;
-    let baseYear = 2024;
-
     const now = new Date();
+    let startDate;
+
     if (period === 'pastYear' || period === 'latestYear') {
-      baseYear = now.getFullYear();
-      startDayOfYear = Math.max(1, Math.floor((now - new Date(baseYear, 0, 1)) / (86400 * 1000)));
+      startDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() - 365));
     } else if (period === 'recent30') {
       totalDays = 30;
-      baseYear = now.getFullYear();
-      startDayOfYear = Math.max(1, Math.floor((now - new Date(baseYear, 0, 1)) / (86400 * 1000)) - 30);
+      startDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() - 30));
     } else if (period === 'forecast') {
       totalDays = 14;
-      baseYear = now.getFullYear();
-      startDayOfYear = Math.max(1, Math.floor((now - new Date(baseYear, 0, 1)) / (86400 * 1000)));
+      startDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() - 7));
+    } else if (period === '2024') {
+      startDate = new Date(Date.UTC(2024, 0, 1));
+    } else if (period === '2023') {
+      startDate = new Date(Date.UTC(2023, 0, 1));
+    } else {
+      startDate = new Date(Date.UTC(2024, 0, 1));
     }
 
     const steps = [];
@@ -1335,7 +1337,11 @@
     const sigma = 5.670374e-8;
 
     for (let dIdx = 0; dIdx < totalDays; dIdx++) {
-      const dayNum = ((startDayOfYear + dIdx - 1) % 365) + 1;
+      const dateObj = new Date(startDate.getTime() + dIdx * 86400 * 1000);
+      const yearStart = new Date(Date.UTC(dateObj.getUTCFullYear(), 0, 1));
+      const dayNum = Math.floor((dateObj - yearStart) / (86400 * 1000)) + 1;
+      const dateStr = dateObj.toISOString().split('T')[0];
+
       const annualAngle = ((2.0 * Math.PI * (dayNum - 105)) / 365.0) + phaseShift;
       const tSeason = tMean + tAmp * Math.cos(annualAngle);
 
@@ -1384,8 +1390,6 @@
         const snowRate = (tAir <= 0.5 && precipMmH > 0) ? (precipMmH / 3600.0) : 0.0;
 
         // Formatted date and time strings
-        const dateObj = new Date(Date.UTC(baseYear, 0, dayNum));
-        const dateStr = dateObj.toISOString().split('T')[0];
         const timeStr = `${dateStr} ${String(h).padStart(2, '0')}:00`;
 
         steps.push({
@@ -2101,21 +2105,224 @@
     ctxHistory.fillText(`${(maxDepth / 2).toFixed(0)}m`, padLeft + chartW + 6, padTop + chartH / 2);
     ctxHistory.fillText(`${maxDepth.toFixed(0)}m`, padLeft + chartW + 6, padTop + chartH);
 
+    // Time axis ticks and labels dynamically generated from dataset chronology
     ctxHistory.textAlign = 'center';
-    ctxHistory.fillStyle = '#6b7280';
-    if (history.length >= 2000) {
-      for (let m = 0; m < 12; m++) {
-        const mIdx = Math.min(history.length - 1, Math.floor((m + 0.5) * (history.length / 12)));
-        const x = xPos(mIdx);
-        ctxHistory.fillText(MONTHS[m], x, height - 10);
+    ctxHistory.font = '10px ' + getComputedStyle(document.body).getPropertyValue('--font-mono');
+
+    // Parse dates/times for history data points
+    let virtualYear = 2024;
+    let prevDoy = -1;
+    let hasAnyRealDate = false;
+    const parsedDates = new Array(history.length);
+
+    for (let i = 0; i < history.length; i++) {
+      const h = history[i];
+      let p = null;
+
+      if (h.dateStr && typeof h.dateStr === 'string') {
+        const mIso = h.dateStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+        if (mIso) {
+          const y = parseInt(mIso[1], 10);
+          const m = parseInt(mIso[2], 10) - 1;
+          const d = parseInt(mIso[3], 10);
+          const hr = h.hourOfDay != null ? h.hourOfDay : 0;
+          p = { date: new Date(Date.UTC(y, m, d, hr)), hasRealDate: true, hasYear: true };
+        } else {
+          const mDoy = h.dateStr.match(/^(\d{4})-(\d{3})$/);
+          if (mDoy) {
+            const y = parseInt(mDoy[1], 10);
+            const doy = parseInt(mDoy[2], 10);
+            const hr = h.hourOfDay != null ? h.hourOfDay : 12;
+            p = { date: new Date(Date.UTC(y, 0, doy, hr)), hasRealDate: true, hasYear: true };
+          }
+        }
+      }
+
+      if (!p && h.timeStr && typeof h.timeStr === 'string') {
+        const mIso = h.timeStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s](\d{1,2}))?/);
+        if (mIso) {
+          const y = parseInt(mIso[1], 10);
+          const m = parseInt(mIso[2], 10) - 1;
+          const d = parseInt(mIso[3], 10);
+          const hr = mIso[4] != null ? parseInt(mIso[4], 10) : (h.hourOfDay != null ? h.hourOfDay : 0);
+          p = { date: new Date(Date.UTC(y, m, d, hr)), hasRealDate: true, hasYear: true };
+        }
+      }
+
+      if (!p && h.dayOfYear != null && !isNaN(h.dayOfYear)) {
+        const doy = Math.floor(h.dayOfYear);
+        const hr = h.hourOfDay != null ? Math.floor(h.hourOfDay) : 0;
+        if (prevDoy !== -1 && doy < prevDoy) {
+          virtualYear++;
+        }
+        prevDoy = doy;
+        p = { date: new Date(Date.UTC(virtualYear, 0, doy, hr)), hasRealDate: false, hasYear: false };
+      }
+
+      if (p && p.hasRealDate) {
+        hasAnyRealDate = true;
+      }
+      parsedDates[i] = p;
+    }
+
+    const firstP = parsedDates[0];
+    const lastP = parsedDates[parsedDates.length - 1];
+    let totalDays = 0;
+    if (firstP && lastP) {
+      totalDays = (lastP.date.getTime() - firstP.date.getTime()) / (86400 * 1000);
+      if (totalDays <= 0 && firstP.date > lastP.date) {
+        totalDays = 365;
+      }
+    }
+
+    const timeTicks = [];
+
+    if (firstP && lastP && totalDays >= 60 && totalDays <= 500) {
+      // Month-based grouping (e.g. 1-year rolling, full calendar year, 365-day benchmarks)
+      const segments = [];
+      let curKey = null;
+      let curIdxs = [];
+      let curYr = 2024;
+      let curMo = 0;
+
+      for (let i = 0; i < parsedDates.length; i++) {
+        const p = parsedDates[i];
+        if (!p) continue;
+        const yr = p.date.getUTCFullYear();
+        const mo = p.date.getUTCMonth();
+        const key = `${yr}-${mo}`;
+        if (key !== curKey) {
+          if (curIdxs.length > 0) {
+            segments.push({ year: curYr, month: curMo, idxs: curIdxs });
+          }
+          curKey = key;
+          curYr = yr;
+          curMo = mo;
+          curIdxs = [i];
+        } else {
+          curIdxs.push(i);
+        }
+      }
+      if (curIdxs.length > 0) {
+        segments.push({ year: curYr, month: curMo, idxs: curIdxs });
+      }
+
+      const yearsPresent = new Set(segments.map(s => s.year));
+      const hasMultiYear = yearsPresent.size > 1;
+      const step = (chartW < 520 && segments.length > 8) ? 2 : 1;
+      let lastX = -999;
+      const minSpacing = 34;
+
+      for (let segIdx = 0; segIdx < segments.length; segIdx += step) {
+        const seg = segments[segIdx];
+        const midIdx = (seg.idxs[0] + seg.idxs[seg.idxs.length - 1]) / 2;
+        const x = xPos(midIdx);
+        const moName = MONTHS[seg.month];
+        let label = moName;
+
+        if (hasAnyRealDate && hasMultiYear) {
+          if (segIdx === 0) {
+            label = `${moName} '${String(seg.year).slice(-2)}`;
+          } else if (seg.month === 0) {
+            label = `${moName} '${String(seg.year).slice(-2)}`;
+          } else if (segIdx === segments.length - 1 && seg.year !== segments[0].year && seg.month !== 0) {
+            label = `${moName} '${String(seg.year).slice(-2)}`;
+          }
+        }
+
+        if (x - lastX >= minSpacing) {
+          timeTicks.push({ x, label });
+          lastX = x;
+        }
+      }
+    } else if (firstP && lastP && totalDays > 500) {
+      // Multi-year spans (> 500 days)
+      const years = {};
+      for (let i = 0; i < parsedDates.length; i++) {
+        const p = parsedDates[i];
+        if (!p) continue;
+        const yr = p.date.getUTCFullYear();
+        if (!years[yr]) years[yr] = [];
+        years[yr].push(i);
+      }
+      let lastX = -999;
+      for (const yr of Object.keys(years)) {
+        const idxs = years[yr];
+        const midIdx = (idxs[0] + idxs[idxs.length - 1]) / 2;
+        const x = xPos(midIdx);
+        if (x - lastX >= 40) {
+          timeTicks.push({ x, label: String(yr) });
+          lastX = x;
+        }
+      }
+    } else if (firstP && lastP && totalDays >= 10 && totalDays < 60) {
+      // Days (e.g. 30 days)
+      const stepDays = totalDays >= 25 ? 5 : 2;
+      let lastDay = -1;
+      let lastX = -999;
+      for (let i = 0; i < parsedDates.length; i++) {
+        const p = parsedDates[i];
+        if (!p) continue;
+        const d = p.date.getUTCDate();
+        if (d !== lastDay && (d % stepDays === 0 || d === 1)) {
+          lastDay = d;
+          const x = xPos(i);
+          if (x - lastX >= 38) {
+            timeTicks.push({ x, label: `${MONTHS[p.date.getUTCMonth()]} ${d}` });
+            lastX = x;
+          }
+        }
+      }
+    } else if (firstP && lastP && totalDays >= 2 && totalDays < 10) {
+      // Daily ticks (e.g. 7-10 days)
+      let lastDay = -1;
+      let lastX = -999;
+      for (let i = 0; i < parsedDates.length; i++) {
+        const p = parsedDates[i];
+        if (!p) continue;
+        const d = p.date.getUTCDate();
+        if (d !== lastDay) {
+          lastDay = d;
+          const x = xPos(i);
+          if (x - lastX >= 35) {
+            timeTicks.push({ x, label: `${MONTHS[p.date.getUTCMonth()]} ${d}` });
+            lastX = x;
+          }
+        }
       }
     } else {
+      // Intraday, synthetic short runs, or unparsed fallback
       const timeTickInterval = Math.max(1, Math.floor(history.length / 6));
       for (let i = 0; i < history.length; i += timeTickInterval) {
         const h = history[i];
         const x = xPos(i);
-        ctxHistory.fillText(`D${h.dayOfYear} ${h.hourOfDay}h`, x, height - 10);
+        const p = parsedDates[i];
+        let label;
+        if (p && p.hasRealDate) {
+          label = `${MONTHS[p.date.getUTCMonth()]} ${p.date.getUTCDate()} ${String(p.date.getUTCHours()).padStart(2, '0')}h`;
+        } else {
+          label = `D${h.dayOfYear} ${h.hourOfDay}h`;
+        }
+        timeTicks.push({ x, label });
       }
+    }
+
+    // Draw vertical background gridlines, axis tick marks, and text labels
+    for (const t of timeTicks) {
+      ctxHistory.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+      ctxHistory.beginPath();
+      ctxHistory.moveTo(t.x, padTop);
+      ctxHistory.lineTo(t.x, padTop + chartH);
+      ctxHistory.stroke();
+
+      ctxHistory.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+      ctxHistory.beginPath();
+      ctxHistory.moveTo(t.x, padTop + chartH);
+      ctxHistory.lineTo(t.x, padTop + chartH + 4);
+      ctxHistory.stroke();
+
+      ctxHistory.fillStyle = '#9ca3af';
+      ctxHistory.fillText(t.label, t.x, height - 10);
     }
 
     ctxHistory.save();
@@ -3004,9 +3211,20 @@
 
         UI.historyTooltip.style.display = 'block';
         UI.historyTooltip.style.left = `${Math.min(rect.width - 160, mouseX + 10)}px`;
-        UI.historyTooltip.style.top = `${Math.max(10, mouseY - 70)}px`;
+        let headerTime = h.timeStr || `Day ${h.dayOfYear}, ${h.hourOfDay}:00`;
+        if (h.dateStr && /^\d{4}-\d{3}$/.test(h.dateStr)) {
+          const parts = h.dateStr.split('-');
+          const y = parseInt(parts[0], 10);
+          const doy = parseInt(parts[1], 10);
+          const dt = new Date(Date.UTC(y, 0, doy));
+          const mo = MONTHS[dt.getUTCMonth()];
+          headerTime = `${y}-${mo}-${String(dt.getUTCDate()).padStart(2, '0')} (${h.timeStr || `Day ${doy}`})`;
+        } else if (!h.timeStr && h.dayOfYear != null) {
+          headerTime = getSimulatedDateString(h.dayOfYear, h.hourOfDay != null ? h.hourOfDay : 0);
+        }
+
         UI.historyTooltip.innerHTML = `
-          <div style="font-weight:600; color:#38bdf8;">${h.timeStr ? h.timeStr : `Day ${h.dayOfYear}, ${h.hourOfDay}:00`}</div>
+          <div style="font-weight:600; color:#38bdf8;">${headerTime}</div>
           <div>T_sfc: <b style="color:#f43f5e;">${h.Tsfc.toFixed(1)}°C</b></div>
           <div>T_wML: <b style="color:#fbbf24;">${h.TwML.toFixed(1)}°C</b></div>
           <div>T_bot: <b style="color:#38bdf8;">${h.Tbot.toFixed(1)}°C</b></div>
