@@ -12,7 +12,7 @@ Interactive WebAssembly Model: **[https://taranarmo.github.io/flake-lake-model/m
 [FLake](https://taranarmo.github.io/flake-lake-model/) is a bulk two-layer lake model based on the concept of **self-similarity** of the temperature-depth curve. It was developed by Dr. Dmitrii Mironov and collaborators at the German Weather Service (Deutscher Wetterdienst, DWD) and the Leibniz Institute of Freshwater Ecology and Inland Fisheries (IGB Berlin), and is used operationally in numerical weather prediction (ICON, COSMO, ECMWF IFS) and climate modeling worldwide.
 
 ### Key Highlights of the Modernized Site:
-- **Zero-Backend Architecture**: The original CGI-based model runner (`_model?LAT=...`) has been replaced with a 100% client-side WebAssembly simulation compiled via **LFortran 0.65.0**. No server backend, database, or CGI scripts required.
+- **Zero-Backend Architecture**: The original CGI-based model runner (`_model?LAT=...`) has been replaced with a 100% client-side WebAssembly simulation compiled via **LFortran 0.68.0**. No server backend, database, or CGI scripts required.
 - **Dedicated Online Model Subsection**: Located under [`model/`](model/) with interactive lake column visualizer, seasonal presets, atmospheric forcing sliders, time-series plotting, and a single-step ODE numerical calculator.
 - **Complete Information Architecture**: Recreates all original sections including Applications, Users directory (with instant search), Documentation & Routines, Useful Hints, Publications bibliography (with instant filter), Model Downloads, Verification Test Runs (tabbed interface for Heiligensee, Müggelsee, Stechlinsee), External-parameter datasets (GLDBv2), Observational datasets, Community links, and Forum.
 - **Markdown Content Source of Truth**: All page contents are authored in Markdown under [`content/*.md`](content/) with YAML frontmatter, making it effortless for scientists and researchers to edit text, add tables, or create new sections without touching raw HTML.
@@ -71,7 +71,7 @@ This updates all `.html` pages and `.shtml` compatibility redirects in `<0.2 sec
 
 The interactive model lives in `model/` and runs 100% in the client's browser:
 - **Zero backend required**: Integrates the Fortran 90 lake equations directly in WebAssembly.
-- **Ultra-compact**: The compiled `flake.wasm` core is only **27.8 KB**.
+- **Ultra-compact**: The compiled `flake.wasm` core is only **26.4 KB**.
 - **Offline / Portable**: Includes an automated Base64 fallback in `wasm-base64.js` so it can run even without an HTTP server under `file://`.
 - **Modes**:
   1. *Interactive Simulation*: Dynamic lake column visualizer, ice/snow growth, seasonal presets (Summer, Autumn Turnover, Winter Freezing, Spring Thaw, 365-Day Annual Cycle), and live time-series telemetry.
@@ -93,23 +93,56 @@ Open **[http://localhost:8000](http://localhost:8000)** in your browser.
 
 ---
 
-## Building from Fortran Sources
+## Building with Nix (Recommended)
 
-The Fortran 90 sources are in `src/`.
+This repository includes a hermetic Nix Flake using the freshly merged `lfortran 0.68.0` package from Nixpkgs.
+
+### Build full website:
+```bash
+nix build
+# Output is placed in ./result (complete static site with WASM binaries)
+```
+
+### Build only WebAssembly:
+```bash
+nix build .#wasm
+# Output in ./result: flake.wasm and wasm-base64.js
+```
+
+### Run and serve locally:
+```bash
+nix run
+# Builds the site and serves on http://localhost:8000
+```
+
+### Interactive development shell:
+```bash
+nix develop
+
+# Inside shell: compile WASM, rebuild website, and run test suite
+make all
+```
+
+---
+
+## Building Manually or via Conda
+
+The Fortran 90 sources are located in `src/`.
 
 ### Prerequisites:
-- **LFortran 0.65.0** (`conda install -c conda-forge lfortran=0.65.0` or via Nixpkgs)
+- **LFortran 0.68.0** (via Nixpkgs or conda-forge)
 - **LLVM Tools** (`llc` with `wasm32` target)
 - **LLD Linker** (`wasm-ld`)
 
-### Build Command:
+### Build Commands:
 ```bash
-# Build WASM and rebuild website
+# Build WASM, rebuild website, and run tests
 make all
 
-# Or directly
-./build.sh
-python3 build_site.py
+# Or individually
+bash ./build.sh
+uv run build_site.py
+node test_flake_wasm.js
 ```
 
 ---
@@ -117,8 +150,7 @@ python3 build_site.py
 ## CI/CD & GitHub Pages Deployment
 
 The automated GitHub Actions workflow in [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml):
-1. Installs LLVM tools (`llc`, `wasm-ld`) and `lfortran` via Micromamba.
-2. Compiles `flake.wasm` from source using `./build.sh`.
-3. Runs `python3 build_site.py` to ensure all static pages are fresh.
-4. Verifies artifact sizes.
-5. Deploys the static site directly to **GitHub Pages**.
+1. Sets up Nix with Flakes enabled via `cachix/install-nix-action`.
+2. Runs `nix build` to hermetically compile `flake.wasm`, execute the test suite, and render the static website.
+3. Verifies artifact sizes.
+4. Deploys the static site directly to **GitHub Pages**.

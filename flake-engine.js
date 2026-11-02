@@ -49,6 +49,7 @@ class FLakeEngine {
         exp: Math.exp,
         pow: Math.pow,
         _lcompilers_snprintf_alloc: () => 0,
+        _lcompilers_runtime_error_exit: (code) => console.error("FLake WASM runtime error exit:", code),
         _lcompilers_runtime_error: (msg) => console.error("FLake WASM runtime error:", msg),
         exit: (code) => console.warn("FLake WASM exit called with code:", code)
       }

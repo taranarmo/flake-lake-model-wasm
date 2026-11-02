@@ -24,40 +24,28 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Micromamba with LFortran & LLVM tools
-        uses: mamba-org/setup-micromamba@v2
+      - name: Install Nix
+        uses: cachix/install-nix-action@v30
         with:
-          environment-name: lfortran-env
-          create-args: >-
-            -c conda-forge
-            lfortran=0.65.0
-            llvm-tools
-            lld
+          extra_nix_config: |
+            experimental-features = nix-command flakes
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-
-      - name: Compile Fortran to WebAssembly & Build Website
-        shell: bash -l {0}
-        run: |
-          echo "Verifying tool versions..."
-          lfortran --version
-          llc --version
-          wasm-ld --version
-          uv --version
-          ./build.sh
-          uv run build_site.py
+      - name: Build WebAssembly & Website via Nix
+        run: nix build
 
       - name: Verify build artifacts
         run: |
-          test -s _site/index.html
-          test -s _site/model/index.html
-          test -s _site/model/flake.wasm
-          test -s _site/model/wasm-base64.js
-          echo "WebAssembly binary size: $(wc -c < _site/model/flake.wasm) bytes"
+          test -s result/index.html
+          test -s result/model/index.html
+          test -s result/model/flake.wasm
+          test -s result/model/wasm-base64.js
+          echo "WebAssembly binary size: $(wc -c < result/model/flake.wasm) bytes"
           echo "Artifact verification passed!"
+
+      - name: Prepare Pages directory
+        run: |
+          rm -rf _site
+          cp -RL result _site
 
       - name: Setup GitHub Pages
         if: ${{ !env.ACT }}
