@@ -230,6 +230,601 @@
     balaton: { name: 'Lake Balaton', lat: 46.85, lon: 17.75, depth: 3.2, clarity: 1.8 }
   };
 
+  /**
+   * GeoLocationPicker
+   * 100% self-hosted, offline HTML5 Canvas vector map component.
+   * Renders Natural Earth landmasses, major lakes, country borders,
+   * lake presets, and target selection pin with pan/zoom.
+   * Zero external API keys or tile network requests.
+   */
+  class GeoLocationPicker {
+    constructor(options = {}) {
+      this.canvas = options.canvas || document.getElementById('geo-picker-canvas');
+      this.coordsDisplay = options.coordsDisplay || document.getElementById('geo-map-cursor-coords');
+      this.tooltip = options.tooltip || document.getElementById('geo-map-tooltip');
+      this.onLocationChange = options.onLocationChange || null;
+      this.onPresetSelect = options.onPresetSelect || null;
+
+      this.targetLat = typeof options.initialLat === 'number' ? options.initialLat : 52.43;
+      this.targetLon = typeof options.initialLon === 'number' ? options.initialLon : 13.63;
+
+      this.centerLat = this.targetLat;
+      this.centerLon = this.targetLon;
+      this.zoom = 1.0;
+
+      this.isDragging = false;
+      this.dragMode = 'pan'; // 'pan' | 'target'
+      this.lastMouseX = 0;
+      this.lastMouseY = 0;
+      this.pulsePhase = 0;
+
+      this.ctx = null;
+      this.geoData = null;
+      this.isInitialized = false;
+      this._animFrame = null;
+    }
+
+    init() {
+      if (!this.canvas) return;
+      this.ctx = this.canvas.getContext('2d');
+      this.geoData = (typeof window !== 'undefined' && window.FLAKE_WORLD_GEO) ? window.FLAKE_WORLD_GEO : null;
+
+      this._bindEvents();
+      this.render();
+      this._startPulseAnimation();
+
+      if (window.ResizeObserver && this.canvas.parentElement) {
+        const ro = new ResizeObserver(() => {
+          this.render();
+        });
+        ro.observe(this.canvas.parentElement);
+      }
+
+      this.isInitialized = true;
+    }
+
+    _bindEvents() {
+      const c = this.canvas;
+
+      c.addEventListener('mousedown', (e) => this._onMouseDown(e));
+      window.addEventListener('mousemove', (e) => this._onMouseMove(e));
+      window.addEventListener('mouseup', (e) => this._onMouseUp(e));
+      c.addEventListener('wheel', (e) => this._onWheel(e), { passive: false });
+      c.addEventListener('mouseleave', () => {
+        if (this.tooltip) this.tooltip.style.display = 'none';
+      });
+
+      // Touch support
+      let lastTouchDist = 0;
+      c.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+          const rect = c.getBoundingClientRect();
+          const t = e.touches[0];
+          this._startDrag(t.clientX - rect.left, t.clientY - rect.top);
+        } else if (e.touches.length === 2) {
+          lastTouchDist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+          );
+        }
+      }, { passive: true });
+
+      c.addEventListener('touchmove', (e) => {
+        const rect = c.getBoundingClientRect();
+        if (e.touches.length === 1 && this.isDragging) {
+          const t = e.touches[0];
+          this._dragMove(t.clientX - rect.left, t.clientY - rect.top);
+        } else if (e.touches.length === 2 && lastTouchDist > 0) {
+          const dist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+          );
+          const factor = dist / lastTouchDist;
+          this.zoom = Math.max(1.0, Math.min(15.0, this.zoom * factor));
+          lastTouchDist = dist;
+          this.render();
+        }
+      }, { passive: true });
+
+      c.addEventListener('touchend', () => {
+        this._endDrag();
+        lastTouchDist = 0;
+      });
+    }
+
+    _startDrag(mouseX, mouseY) {
+      this.lastMouseX = mouseX;
+      this.lastMouseY = mouseY;
+      this.isDragging = true;
+
+      // Check if clicking preset lake
+      const presetHit = this._hitTestPreset(mouseX, mouseY);
+      if (presetHit) {
+        this.isDragging = false;
+        this.setCoordinates(presetHit.lake.lat, presetHit.lake.lon, true);
+        if (this.onPresetSelect) this.onPresetSelect(presetHit.key, presetHit.lake);
+        return;
+      }
+
+      // Check if clicking target pin
+      const targetScreen = this._coordsToScreen(this.targetLon, this.targetLat);
+      if (targetScreen && Math.hypot(targetScreen.x - mouseX, targetScreen.y - mouseY) < 14) {
+        this.dragMode = 'target';
+        this.canvas.style.cursor = 'grabbing';
+      } else {
+        this.dragMode = 'pan';
+        this.canvas.style.cursor = 'grabbing';
+        this._dragStartX = mouseX;
+        this._dragStartY = mouseY;
+      }
+    }
+
+    _dragMove(mouseX, mouseY) {
+      if (!this.isDragging) return;
+
+      const rect = this.canvas.getBoundingClientRect();
+      const w = rect.width;
+      const h = rect.height;
+      const baseWorldW = Math.max(w, h * 2);
+      const worldW = baseWorldW * this.zoom;
+      const worldH = worldW / 2;
+
+      if (this.dragMode === 'target') {
+        const geo = this._screenToCoords(mouseX, mouseY);
+        this.targetLon = geo.lon;
+        this.targetLat = geo.lat;
+        this.render();
+        if (this.onLocationChange) this.onLocationChange(this.targetLat, this.targetLon);
+      } else {
+        const dx = mouseX - this.lastMouseX;
+        const dy = mouseY - this.lastMouseY;
+        this.centerLon -= (dx / worldW) * 360;
+        this.centerLat += (dy / worldH) * 180;
+        this._clampCenter();
+        this.render();
+      }
+
+      this.lastMouseX = mouseX;
+      this.lastMouseY = mouseY;
+    }
+
+    _endDrag() {
+      if (!this.isDragging) return;
+
+      if (this.dragMode === 'pan' && typeof this._dragStartX === 'number') {
+        const dist = Math.hypot(this.lastMouseX - this._dragStartX, this.lastMouseY - this._dragStartY);
+        if (dist < 5) {
+          const geo = this._screenToCoords(this.lastMouseX, this.lastMouseY);
+          this.targetLon = geo.lon;
+          this.targetLat = geo.lat;
+          this.render();
+          if (this.onLocationChange) this.onLocationChange(this.targetLat, this.targetLon);
+        }
+      }
+
+      this.isDragging = false;
+      this.canvas.style.cursor = 'crosshair';
+    }
+
+    _onMouseDown(e) {
+      const rect = this.canvas.getBoundingClientRect();
+      this._startDrag(e.clientX - rect.left, e.clientY - rect.top);
+    }
+
+    _onMouseMove(e) {
+      const rect = this.canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      if (this.isDragging) {
+        this._dragMove(mouseX, mouseY);
+        return;
+      }
+
+      if (mouseX >= 0 && mouseX <= rect.width && mouseY >= 0 && mouseY <= rect.height) {
+        const geo = this._screenToCoords(mouseX, mouseY);
+        if (this.coordsDisplay) {
+          const latStr = Math.abs(geo.lat).toFixed(2) + '°' + (geo.lat >= 0 ? 'N' : 'S');
+          const lonStr = Math.abs(geo.lon).toFixed(2) + '°' + (geo.lon >= 0 ? 'E' : 'W');
+          this.coordsDisplay.textContent = `${latStr}, ${lonStr}`;
+        }
+
+        const hit = this._hitTestPreset(mouseX, mouseY);
+        if (hit) {
+          this.canvas.style.cursor = 'pointer';
+          if (this.tooltip) {
+            this.tooltip.innerHTML = `<b>${hit.lake.name}</b><br>${hit.lake.lat.toFixed(2)}°N, ${hit.lake.lon.toFixed(2)}°E • Depth: ${hit.lake.depth}m`;
+            this.tooltip.style.left = `${mouseX}px`;
+            this.tooltip.style.top = `${mouseY}px`;
+            this.tooltip.style.display = 'block';
+          }
+        } else {
+          const targetScreen = this._coordsToScreen(this.targetLon, this.targetLat);
+          if (targetScreen && Math.hypot(targetScreen.x - mouseX, targetScreen.y - mouseY) < 14) {
+            this.canvas.style.cursor = 'grab';
+          } else {
+            this.canvas.style.cursor = 'crosshair';
+          }
+          if (this.tooltip) this.tooltip.style.display = 'none';
+        }
+      }
+    }
+
+    _onMouseUp() {
+      this._endDrag();
+    }
+
+    _onWheel(e) {
+      e.preventDefault();
+      const rect = this.canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      const factor = e.deltaY < 0 ? 1.25 : 0.8;
+      this.zoomAt(mouseX, mouseY, factor);
+    }
+
+    zoomAt(mouseX, mouseY, factor) {
+      const rect = this.canvas.getBoundingClientRect();
+      const w = rect.width;
+      const h = rect.height;
+      const baseWorldW = Math.max(w, h * 2);
+
+      const oldZoom = this.zoom;
+      const newZoom = Math.max(1.0, Math.min(15.0, oldZoom * factor));
+      if (newZoom === oldZoom) return;
+
+      const oldWorldW = baseWorldW * oldZoom;
+      const oldWorldH = oldWorldW / 2;
+
+      const lonUnderMouse = (mouseX - w / 2) / oldWorldW * 360 + this.centerLon;
+      const latUnderMouse = this.centerLat - (mouseY - h / 2) / oldWorldH * 180;
+
+      this.zoom = newZoom;
+      const newWorldW = baseWorldW * newZoom;
+      const newWorldH = newWorldW / 2;
+
+      this.centerLon = lonUnderMouse - (mouseX - w / 2) / newWorldW * 360;
+      this.centerLat = latUnderMouse + (mouseY - h / 2) / newWorldH * 180;
+
+      this._clampCenter();
+      this.render();
+    }
+
+    zoomIn() {
+      const rect = this.canvas.getBoundingClientRect();
+      this.zoomAt(rect.width / 2, rect.height / 2, 1.35);
+    }
+
+    zoomOut() {
+      const rect = this.canvas.getBoundingClientRect();
+      this.zoomAt(rect.width / 2, rect.height / 2, 0.74);
+    }
+
+    resetView() {
+      this.zoom = 1.0;
+      this.centerLat = this.targetLat;
+      this.centerLon = this.targetLon;
+      this._clampCenter();
+      this.render();
+    }
+
+    _clampCenter() {
+      while (this.centerLon > 180) this.centerLon -= 360;
+      while (this.centerLon < -180) this.centerLon += 360;
+      this.centerLat = Math.max(-75, Math.min(75, this.centerLat));
+    }
+
+    _coordsToScreen(lon, lat) {
+      const rect = this.canvas.getBoundingClientRect();
+      const w = rect.width;
+      const h = rect.height;
+      const baseWorldW = Math.max(w, h * 2);
+      const worldW = baseWorldW * this.zoom;
+      const worldH = worldW / 2;
+
+      let dLon = lon - this.centerLon;
+      while (dLon > 180) dLon -= 360;
+      while (dLon < -180) dLon += 360;
+
+      const x = (dLon / 360) * worldW + w / 2;
+      const y = ((this.centerLat - lat) / 180) * worldH + h / 2;
+
+      return { x, y };
+    }
+
+    _screenToCoords(x, y) {
+      const rect = this.canvas.getBoundingClientRect();
+      const w = rect.width;
+      const h = rect.height;
+      const baseWorldW = Math.max(w, h * 2);
+      const worldW = baseWorldW * this.zoom;
+      const worldH = worldW / 2;
+
+      let lon = (x - w / 2) / worldW * 360 + this.centerLon;
+      while (lon > 180) lon -= 360;
+      while (lon < -180) lon += 360;
+
+      let lat = this.centerLat - (y - h / 2) / worldH * 180;
+      lat = Math.max(-85, Math.min(85, lat));
+
+      return { lon, lat };
+    }
+
+    _hitTestPreset(mouseX, mouseY) {
+      if (typeof LAKE_PRESETS === 'undefined') return null;
+      for (const [key, lake] of Object.entries(LAKE_PRESETS)) {
+        const pt = this._coordsToScreen(lake.lon, lake.lat);
+        if (pt && Math.hypot(pt.x - mouseX, pt.y - mouseY) <= 10) {
+          return { key, lake };
+        }
+      }
+      return null;
+    }
+
+    setCoordinates(lat, lon, pan = true, zoom = null) {
+      this.targetLat = Math.max(-85, Math.min(85, lat));
+      let nLon = lon;
+      while (nLon > 180) nLon -= 360;
+      while (nLon < -180) nLon += 360;
+      this.targetLon = nLon;
+
+      if (typeof zoom === 'number') {
+        this.zoom = zoom;
+      }
+      if (pan) {
+        this.centerLat = this.targetLat;
+        this.centerLon = this.targetLon;
+        this._clampCenter();
+      }
+      this.render();
+    }
+
+    invalidate() {
+      this.render();
+    }
+
+    _startPulseAnimation() {
+      let lastTime = 0;
+      const animate = (time) => {
+        if (!lastTime) lastTime = time;
+        const delta = (time - lastTime) / 1000;
+        lastTime = time;
+
+        this.pulsePhase = (this.pulsePhase + delta * 2.5) % (Math.PI * 2);
+        this.render();
+        this._animFrame = requestAnimationFrame(animate);
+      };
+      this._animFrame = requestAnimationFrame(animate);
+    }
+
+    render() {
+      if (!this.canvas || !this.ctx) return;
+      const rect = this.canvas.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+
+      const dpr = window.devicePixelRatio || 1;
+      const w = Math.floor(rect.width);
+      const h = Math.floor(rect.height);
+
+      if (this.canvas.width !== Math.floor(w * dpr) || this.canvas.height !== Math.floor(h * dpr)) {
+        this.canvas.width = Math.floor(w * dpr);
+        this.canvas.height = Math.floor(h * dpr);
+      }
+
+      const ctx = this.ctx;
+      ctx.resetTransform();
+      ctx.scale(dpr, dpr);
+
+      // 1. Ocean Background
+      ctx.fillStyle = '#090d16';
+      ctx.fillRect(0, 0, w, h);
+
+      // 2. Graticule Lines (every 30 deg)
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = '#131b2e';
+      ctx.setLineDash([2, 4]);
+
+      for (let lat = -60; lat <= 60; lat += 30) {
+        const pt = this._coordsToScreen(0, lat);
+        if (pt) {
+          ctx.beginPath();
+          ctx.moveTo(0, pt.y);
+          ctx.lineTo(w, pt.y);
+          ctx.stroke();
+        }
+      }
+
+      for (let lon = -180; lon <= 180; lon += 30) {
+        const pt = this._coordsToScreen(lon, 0);
+        if (pt && pt.x >= -50 && pt.x <= w + 50) {
+          ctx.beginPath();
+          ctx.moveTo(pt.x, 0);
+          ctx.lineTo(pt.x, h);
+          ctx.stroke();
+        }
+      }
+
+      // Equator
+      ctx.setLineDash([]);
+      ctx.strokeStyle = '#1b253b';
+      const eq = this._coordsToScreen(0, 0);
+      if (eq) {
+        ctx.beginPath();
+        ctx.moveTo(0, eq.y);
+        ctx.lineTo(w, eq.y);
+        ctx.stroke();
+      }
+
+      // 3. Draw Land Polygons
+      if (this.geoData && this.geoData.land) {
+        ctx.fillStyle = '#1e293b';
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 1;
+
+        for (const geom of this.geoData.land) {
+          this._drawGeometry(ctx, geom, true, true);
+        }
+      }
+
+      // 4. Draw Country Borders
+      if (this.geoData && this.geoData.borders) {
+        ctx.strokeStyle = '#26334d';
+        ctx.lineWidth = 0.8;
+        ctx.setLineDash([2, 2]);
+
+        for (const border of this.geoData.borders) {
+          ctx.beginPath();
+          let started = false;
+          let prevX = 0;
+          for (let i = 0; i < border.length; i++) {
+            const pt = this._coordsToScreen(border[i][0], border[i][1]);
+            if (!pt) continue;
+            if (started && Math.abs(pt.x - prevX) > 200) {
+              ctx.moveTo(pt.x, pt.y);
+            } else if (!started) {
+              ctx.moveTo(pt.x, pt.y);
+              started = true;
+            } else {
+              ctx.lineTo(pt.x, pt.y);
+            }
+            prevX = pt.x;
+          }
+          if (started) ctx.stroke();
+        }
+        ctx.setLineDash([]);
+      }
+
+      // 5. Draw Major Lakes
+      if (this.geoData && this.geoData.lakes) {
+        ctx.fillStyle = '#090d16';
+        ctx.strokeStyle = '#0284c7';
+        ctx.lineWidth = 1;
+
+        for (const lake of this.geoData.lakes) {
+          this._drawGeometry(ctx, lake.geometry, true, true);
+        }
+      }
+
+      // 6. Draw Lake Presets Markers
+      if (typeof LAKE_PRESETS !== 'undefined') {
+        for (const [key, lake] of Object.entries(LAKE_PRESETS)) {
+          const pt = this._coordsToScreen(lake.lon, lake.lat);
+          if (!pt || pt.x < -20 || pt.x > w + 20 || pt.y < -20 || pt.y > h + 20) continue;
+
+          // Halo
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, 6, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(6, 182, 212, 0.25)';
+          ctx.fill();
+
+          // Dot
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, 3.5, 0, Math.PI * 2);
+          ctx.fillStyle = '#06b6d4';
+          ctx.fill();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+
+          // Label if zoomed in
+          if (this.zoom >= 3.0) {
+            ctx.font = '10px sans-serif';
+            const txt = lake.name.split(',')[0];
+            const tw = ctx.measureText(txt).width;
+            ctx.fillStyle = 'rgba(11, 15, 25, 0.85)';
+            ctx.fillRect(pt.x + 6, pt.y - 12, tw + 6, 14);
+            ctx.fillStyle = '#7dd3fc';
+            ctx.fillText(txt, pt.x + 9, pt.y - 2);
+          }
+        }
+      }
+
+      // 7. Draw Target Pin & Pulse
+      const tPt = this._coordsToScreen(this.targetLon, this.targetLat);
+      if (tPt && tPt.x >= -30 && tPt.x <= w + 30 && tPt.y >= -30 && tPt.y <= h + 30) {
+        const pulseR = 8 + (Math.sin(this.pulsePhase) + 1) * 7;
+        const pulseAlpha = 0.6 * (1 - (pulseR - 8) / 14);
+        ctx.beginPath();
+        ctx.arc(tPt.x, tPt.y, pulseR, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(56, 189, 248, ${pulseAlpha})`;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.ellipse(tPt.x, tPt.y + 1, 5, 2.5, 0, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        ctx.fill();
+
+        ctx.save();
+        ctx.translate(tPt.x, tPt.y);
+
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.bezierCurveTo(-6, -10, -9, -15, -9, -20);
+        ctx.arc(0, -20, 9, Math.PI, 0, false);
+        ctx.bezierCurveTo(9, -15, 6, -10, 0, 0);
+        ctx.closePath();
+
+        ctx.fillStyle = '#0284c7';
+        ctx.fill();
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 1.8;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(0, -20, 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+
+        ctx.restore();
+      }
+    }
+
+    _drawGeometry(ctx, geom, fill = true, stroke = true) {
+      if (!geom) return;
+      const type = geom.type;
+
+      if (type === 'Polygon') {
+        this._drawPolygon(ctx, geom.coordinates, fill, stroke);
+      } else if (type === 'MultiPolygon') {
+        for (const poly of geom.coordinates) {
+          this._drawPolygon(ctx, poly, fill, stroke);
+        }
+      }
+    }
+
+    _drawPolygon(ctx, rings, fill = true, stroke = true) {
+      if (!rings || rings.length === 0) return;
+
+      ctx.beginPath();
+      for (const ring of rings) {
+        if (!ring || ring.length < 2) continue;
+        let started = false;
+        let prevX = 0;
+
+        for (let i = 0; i < ring.length; i++) {
+          const pt = this._coordsToScreen(ring[i][0], ring[i][1]);
+          if (!pt) continue;
+
+          if (started && Math.abs(pt.x - prevX) > 200) {
+            ctx.moveTo(pt.x, pt.y);
+          } else if (!started) {
+            ctx.moveTo(pt.x, pt.y);
+            started = true;
+          } else {
+            ctx.lineTo(pt.x, pt.y);
+          }
+          prevX = pt.x;
+        }
+        ctx.closePath();
+      }
+
+      if (fill) ctx.fill('evenodd');
+      if (stroke) ctx.stroke();
+    }
+  }
+
   function getSimulatedDateString(dayOfYear, hourOfDay) {
     let day = dayOfYear;
     let monthIdx = 0;
@@ -297,6 +892,14 @@
     apiLakePreset: document.getElementById('api-lake-preset'),
     apiLat: document.getElementById('api-lat'),
     apiLon: document.getElementById('api-lon'),
+    btnMapZoomIn: document.getElementById('btn-map-zoom-in'),
+    btnMapZoomOut: document.getElementById('btn-map-zoom-out'),
+    btnMapReset: document.getElementById('btn-map-reset'),
+    btnToggleMap: document.getElementById('btn-toggle-map'),
+    geoPickerWrapper: document.getElementById('geo-picker-wrapper'),
+    geoPickerCanvas: document.getElementById('geo-picker-canvas'),
+    geoMapCursorCoords: document.getElementById('geo-map-cursor-coords'),
+    geoMapTooltip: document.getElementById('geo-map-tooltip'),
     apiPeriod: document.getElementById('api-period'),
     btnFetchApi: document.getElementById('btn-fetch-api'),
     apiStatusBox: document.getElementById('api-status-box'),
@@ -393,6 +996,9 @@
     calcJsonOutput: document.getElementById('calc-json-output'),
     btnCopyJson: document.getElementById('btn-copy-json')
   };
+
+  // Interactive Geographic Map Picker Instance
+  let geoPicker = null;
 
   // Canvas Contexts
   const ctxLake = UI.lakeCanvas.getContext('2d');
@@ -2940,6 +3546,9 @@
         if (UI.panelForcingManual) UI.panelForcingManual.style.display = 'none';
         if (UI.panelForcingCurated) UI.panelForcingCurated.style.display = 'none';
         if (UI.panelForcingCustom) UI.panelForcingCustom.style.display = 'none';
+        if (geoPicker) {
+          geoPicker.invalidate();
+        }
         if (state.datasetResults && state.datasetResults.length > 0) {
           state.isDatasetMode = true;
           if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'flex';
@@ -3075,7 +3684,54 @@
           if (UI.selectClarity) UI.selectClarity.value = info.clarity.toString();
           engine.setLakeParameters({ extinWater: info.clarity });
           updateLakeDepth(info.depth);
+          if (geoPicker) {
+            geoPicker.setCoordinates(info.lat, info.lon, true, 8);
+          }
         }
+      });
+    }
+
+    // Manual Coordinates Input Sync with Map
+    const handleManualCoordinatesChange = () => {
+      const lat = parseFloat(UI.apiLat.value);
+      const lon = parseFloat(UI.apiLon.value);
+      if (!isNaN(lat) && !isNaN(lon) && geoPicker) {
+        geoPicker.setCoordinates(lat, lon, true);
+        if (UI.apiLakePreset) UI.apiLakePreset.value = 'custom';
+      }
+    };
+    if (UI.apiLat) UI.apiLat.addEventListener('input', handleManualCoordinatesChange);
+    if (UI.apiLon) UI.apiLon.addEventListener('input', handleManualCoordinatesChange);
+
+    // Toggle Map Visibility
+    if (UI.btnToggleMap && UI.geoPickerWrapper) {
+      UI.btnToggleMap.addEventListener('click', () => {
+        const isHidden = UI.geoPickerWrapper.style.display === 'none';
+        if (isHidden) {
+          UI.geoPickerWrapper.style.display = 'block';
+          UI.btnToggleMap.textContent = 'Collapse';
+          if (geoPicker) geoPicker.invalidate();
+        } else {
+          UI.geoPickerWrapper.style.display = 'none';
+          UI.btnToggleMap.textContent = 'Expand';
+        }
+      });
+    }
+
+    // Map Zoom & Reset Controls
+    if (UI.btnMapZoomIn) {
+      UI.btnMapZoomIn.addEventListener('click', () => {
+        if (geoPicker) geoPicker.zoomIn();
+      });
+    }
+    if (UI.btnMapZoomOut) {
+      UI.btnMapZoomOut.addEventListener('click', () => {
+        if (geoPicker) geoPicker.zoomOut();
+      });
+    }
+    if (UI.btnMapReset) {
+      UI.btnMapReset.addEventListener('click', () => {
+        if (geoPicker) geoPicker.resetView();
       });
     }
 
@@ -3255,6 +3911,34 @@
       updateLakeDepth(state.lakeDepth);
       updateCuratedLakeCard('heiligensee');
       applyPreset('summer');
+
+      // Initialize offline interactive location map picker
+      try {
+        geoPicker = new GeoLocationPicker({
+          canvas: UI.geoPickerCanvas,
+          coordsDisplay: UI.geoMapCursorCoords,
+          tooltip: UI.geoMapTooltip,
+          initialLat: parseFloat(UI.apiLat?.value) || 52.43,
+          initialLon: parseFloat(UI.apiLon?.value) || 13.63,
+          onLocationChange: (lat, lon) => {
+            if (UI.apiLat) UI.apiLat.value = lat.toFixed(2);
+            if (UI.apiLon) UI.apiLon.value = lon.toFixed(2);
+            if (UI.apiLakePreset) UI.apiLakePreset.value = 'custom';
+          },
+          onPresetSelect: (key, lake) => {
+            if (UI.apiLakePreset) UI.apiLakePreset.value = key;
+            if (UI.apiLat) UI.apiLat.value = lake.lat;
+            if (UI.apiLon) UI.apiLon.value = lake.lon;
+            state.waterClarity = lake.clarity;
+            if (UI.selectClarity) UI.selectClarity.value = lake.clarity.toString();
+            engine.setLakeParameters({ extinWater: lake.clarity });
+            updateLakeDepth(lake.depth);
+          }
+        });
+        geoPicker.init();
+      } catch (mapErr) {
+        console.warn('Map picker initialization skipped:', mapErr);
+      }
 
       requestAnimationFrame(animationLoop);
     } catch (err) {

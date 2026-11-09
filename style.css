@@ -1182,3 +1182,121 @@ footer a:hover {
   resize: vertical;
   outline: none;
 }
+
+/* ==========================================================================
+   Interactive Map Picker Component (Canvas Vector Basemap)
+   ========================================================================== */
+.geo-picker-card {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  margin-bottom: 0.8rem;
+  overflow: hidden;
+  transition: border-color 0.15s ease;
+}
+
+.geo-picker-card:hover {
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+.geo-picker-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35rem 0.6rem;
+  background: rgba(17, 24, 39, 0.85);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.geo-picker-title {
+  display: flex;
+  align-items: center;
+  font-size: 0.73rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.geo-picker-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.geo-picker-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  padding: 1px 7px;
+  min-width: 22px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.geo-picker-btn:hover {
+  background: rgba(56, 189, 248, 0.15);
+  color: var(--accent-blue);
+  border-color: var(--accent-blue);
+}
+
+.geo-picker-wrapper {
+  position: relative;
+  width: 100%;
+  height: 230px;
+  background: #090d16;
+  overflow: hidden;
+  cursor: crosshair;
+}
+
+.geo-picker-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.geo-map-cursor-coords {
+  position: absolute;
+  bottom: 6px;
+  left: 8px;
+  background: rgba(11, 15, 25, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--accent-blue);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.geo-map-tooltip {
+  position: absolute;
+  background: #111827;
+  border: 1px solid var(--accent-blue);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  color: #f3f4f6;
+  pointer-events: none;
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+  transform: translate(-50%, -100%);
+  margin-top: -8px;
+  white-space: nowrap;
+}
+
+.geo-picker-footer {
+  padding: 0.35rem 0.6rem;
+  background: rgba(11, 15, 25, 0.95);
+  border-top: 1px solid var(--border-color);
+  font-size: 0.7rem;
+  color: var(--text-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+

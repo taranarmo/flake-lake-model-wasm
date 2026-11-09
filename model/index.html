@@ -326,6 +326,34 @@
                 </select>
               </div>
 
+              <!-- Interactive Map Picker -->
+              <div class="geo-picker-card">
+                <div class="geo-picker-toolbar">
+                  <span class="geo-picker-title">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 5px; vertical-align: -1px;">
+                      <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
+                      <line x1="8" y1="2" x2="8" y2="18"></line>
+                      <line x1="16" y1="6" x2="16" y2="22"></line>
+                    </svg>
+                    Interactive Map Picker (Offline Vector)
+                  </span>
+                  <div class="geo-picker-actions">
+                    <button type="button" id="btn-map-zoom-in" class="geo-picker-btn" title="Zoom In">+</button>
+                    <button type="button" id="btn-map-zoom-out" class="geo-picker-btn" title="Zoom Out">−</button>
+                    <button type="button" id="btn-map-reset" class="geo-picker-btn" title="Reset Map View">⟲</button>
+                    <button type="button" id="btn-toggle-map" class="geo-picker-btn" title="Expand or collapse map">Collapse</button>
+                  </div>
+                </div>
+                <div id="geo-picker-wrapper" class="geo-picker-wrapper">
+                  <canvas id="geo-picker-canvas" class="geo-picker-canvas"></canvas>
+                  <div id="geo-map-cursor-coords" class="geo-map-cursor-coords">52.43°N, 13.63°E</div>
+                  <div id="geo-map-tooltip" class="geo-map-tooltip" style="display: none;"></div>
+                </div>
+                <div class="geo-picker-footer">
+                  <span class="geo-picker-hint">💡 Click or drag pin to select place. Preset lakes are clickable.</span>
+                </div>
+              </div>
+
               <!-- Lat / Lon inputs -->
               <div class="api-input-grid">
                 <div>
@@ -727,6 +755,9 @@
       • Repository: <a href="https://github.com/taranarmo/flake-lake-model" target="_blank" rel="noopener">taranarmo/flake-lake-model</a>
     </p>
   </footer>
+
+  <!-- Offline World Vector Geography -->
+  <script src="world-geo.js"></script>
 
   <!-- Scripts -->
   <script src="wasm-base64.js"></script>
