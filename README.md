@@ -2,8 +2,9 @@
 
 A modernized, responsive, and easy-to-maintain web presence for the **FLake (Freshwater Lake)** thermodynamic model, recreating the original IGB Berlin portal (`http://www.flake.igb-berlin.de/old/`) as a static site hosted on **GitHub Pages**, featuring the complete Fortran 90 model running 100% client-side via **WebAssembly (WASM)**.
 
-Live Website: **[https://taranarmo.github.io/flake-lake-model/](https://taranarmo.github.io/flake-lake-model/)**  
-Interactive WebAssembly Model: **[https://taranarmo.github.io/flake-lake-model/model/](https://taranarmo.github.io/flake-lake-model/model/)**
+Live Website: **[https://taranarmo.github.io/flake-lake-model-wasm/](https://taranarmo.github.io/flake-lake-model-wasm/)**  
+Interactive WebAssembly Model: **[https://taranarmo.github.io/flake-lake-model-wasm/model/](https://taranarmo.github.io/flake-lake-model-wasm/model/)**  
+Core Fortran Model: **[https://github.com/taranarmo/flake-lake-model](https://github.com/taranarmo/flake-lake-model)**
 
 ---
 

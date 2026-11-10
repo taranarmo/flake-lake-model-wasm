@@ -15,7 +15,8 @@ FLake source codes and boundary layer schemes are distributed freely under the *
 
 - **Source Code Archive:** [src_flake_sfcflx.tar.gz (75 KB)](assets/downloads/src_flake_sfcflx.tar.gz) or [src_flake_sfcflx.zip (82 KB)](assets/downloads/src_flake_sfcflx.zip)
 - **Documentation:** [FLake Synopsis (PDF, 107 KB)](assets/papers/flake_synopsis.pdf)
-- **GitHub Repository:** [taranarmo/flake-lake-model](https://github.com/taranarmo/flake-lake-model)
+- **Fortran Source Repository:** [taranarmo/flake-lake-model](https://github.com/taranarmo/flake-lake-model)
+- **Web Runtime & Interactive App:** [taranarmo/flake-lake-model-wasm](https://github.com/taranarmo/flake-lake-model-wasm)
 
 ## License (MIT)
 
