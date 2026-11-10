@@ -27,7 +27,8 @@
               src = ./.;
               filter = path: type:
                 let base = baseNameOf path;
-                in (base == "src" || pkgs.lib.hasPrefix (toString ./src) path);
+                in (base == "src" || pkgs.lib.hasPrefix (toString ./src) path ||
+                    base == "flake-lake-model" || pkgs.lib.hasPrefix (toString ./flake-lake-model) path);
             };
 
             nativeBuildInputs = [

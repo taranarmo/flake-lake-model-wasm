@@ -11,6 +11,11 @@ command -v lfortran >/dev/null 2>&1 || { echo "Error: lfortran is not installed 
 command -v llc >/dev/null 2>&1 || { echo "Error: llc (LLVM compiler) is not installed or not in PATH"; exit 1; }
 command -v wasm-ld >/dev/null 2>&1 || { echo "Error: wasm-ld (LLVM WebAssembly linker) is not installed or not in PATH"; exit 1; }
 
+if [ ! -f "${SRC_DIR}/flake.f90" ]; then
+  echo "Initializing git submodule for flake-lake-model..."
+  git submodule update --init --recursive
+fi
+
 cd "${SRC_DIR}"
 
 echo "Step 1: Compiling Fortran 90 modules..."

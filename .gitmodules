@@ -1,0 +1,3 @@
+[submodule "flake-lake-model"]
+	path = flake-lake-model
+	url = https://github.com/taranarmo/flake-lake-model.git
