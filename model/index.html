@@ -195,6 +195,9 @@
               <button type="button" id="tab-forcing-api" class="forcing-tab active" title="Fetch live or historical ERA5 reanalysis weather data via Open-Meteo">
                 Weather API
               </button>
+              <button type="button" id="tab-forcing-perpetual" class="forcing-tab" title="Run Perpetual Year Equilibrium Simulation (IGB Berlin climatology / cyclic equilibrium)">
+                Perpetual Year
+              </button>
               <button type="button" id="tab-forcing-curated" class="forcing-tab" title="Load verified benchmark lake datasets (offline, published data)">
                 Curated
               </button>
@@ -296,6 +299,91 @@
               <!-- Status Feedback Banner -->
               <div id="api-status-box" class="api-status-box" style="display: none;">
                 <span id="api-status-text">Ready to fetch</span>
+              </div>
+            </div>
+
+            <!-- PANEL: Perpetual Year (IGB Berlin Climatology & Equilibrium) -->
+            <div id="panel-forcing-perpetual" style="display: none;">
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span class="control-label">Perpetual Climatology Benchmark</span>
+                </div>
+                <select id="perpetual-lake-select" class="api-select">
+                  <option value="mueggelsee" selected>Lake Müggelsee / Stechlin (Germany, 52°N, 13°E)</option>
+                  <option value="sakhalin_reference">Sakhalin Reference Lake (CGI Validation, 49°N, 145°E)</option>
+                  <option value="ladoga">Lake Ladoga (Russia / Boreal, 60°N, 30°E)</option>
+                  <option value="superior">Lake Superior (USA / Canada, 48°N, -87°E)</option>
+                  <option value="geneva">Lake Geneva / Constance (Alps, 46°N, 6°E)</option>
+                  <option value="baikal">Lake Baikal (Siberia, 53°N, 107°E)</option>
+                  <option value="victoria">Lake Victoria (Equatorial Africa, -1°N, 33°E)</option>
+                  <option value="tahoe">Lake Tahoe (Sierra Nevada, 39°N, -120°E)</option>
+                  <option value="titicaca">Lake Titicaca (Andes, -16°N, -69°E)</option>
+                  <option value="chad">Lake Chad (Sahel, 12°N, 22°E)</option>
+                  <option value="arctic_tundra">Pechora Tundra Lake (Arctic, 68°N, 52°E)</option>
+                  <option value="mediterranean">North African Lake (Mediterranean, 34°N, -6°E)</option>
+                </select>
+              </div>
+
+              <!-- Perpetual Info Card -->
+              <div id="perpetual-lake-card" class="lake-info-card">
+                <div class="lake-info-title">
+                  <span id="perpetual-name">Lake Müggelsee / Stechlin</span>
+                  <span id="perpetual-regime-pill" style="font-size: 0.7rem; background: #0284c7; color: #fff; padding: 2px 6px; border-radius: 4px;">Dimictic</span>
+                </div>
+                <div class="lake-meta-chips">
+                  <span class="lake-chip">Depth: <b id="perpetual-depth">7.5 m</b></span>
+                  <span class="lake-chip">Fetch: <b id="perpetual-fetch">2000 m</b></span>
+                  <span class="lake-chip">κ: <b id="perpetual-clarity">1.0 m⁻¹</b></span>
+                  <span class="lake-chip">Lat: <b id="perpetual-lat">52.0°N</b></span>
+                </div>
+                <div id="perpetual-desc" class="lake-desc-text">
+                  Temperate polymictic/dimictic lake in Brandenburg, Germany. Historical FLake calibration and validation benchmark.
+                </div>
+                <div class="lake-source-tag" style="display: flex; justify-content: space-between;">
+                  <span>Source: IGB Berlin Global Reanalysis (2,920 steps, 3h)</span>
+                  <span id="perpetual-tair-mean">T_air: 11.6 °C</span>
+                </div>
+              </div>
+
+              <!-- Equilibrium Settings -->
+              <div class="api-input-grid" style="margin-top: 0.6rem;">
+                <div>
+                  <div class="control-label-row">
+                    <span class="control-label">Max Cycles</span>
+                  </div>
+                  <input type="number" id="perpetual-max-cycles" class="api-input" min="1" max="10" step="1" value="5">
+                </div>
+                <div>
+                  <div class="control-label-row">
+                    <span class="control-label">Convergence Tol (°C)</span>
+                  </div>
+                  <input type="number" id="perpetual-tol" class="api-input" min="0.001" max="0.5" step="0.01" value="0.05">
+                </div>
+              </div>
+
+              <!-- Convergence Results Badge & Metrics -->
+              <div id="perpetual-convergence-box" class="lake-info-card" style="display: none; margin-top: 0.75rem; border-left: 3px solid #10b981; background: var(--bg-surface);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                  <span style="font-weight: 600; font-size: 0.8rem; color: #10b981;">✓ Thermal Equilibrium Converged</span>
+                  <span id="perpetual-cycles-badge" style="font-size: 0.7rem; background: rgba(16, 185, 129, 0.2); color: #10b981; padding: 2px 6px; border-radius: 4px; font-weight: 600;">2 Cycles</span>
+                </div>
+                <div style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.4;">
+                  <span id="perpetual-convergence-text">Convergence reached with &Delta;T &lt; 0.05 °C.</span>
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; font-size: 0.72rem;">
+                  <span class="lake-chip">Regime: <b id="perpetual-diag-regime">Dimictic</b></span>
+                  <span class="lake-chip">Ice: <b id="perpetual-diag-ice">64 d</b> (<b id="perpetual-diag-hice">29.6 cm</b>)</span>
+                  <span class="lake-chip">Stratified: <b id="perpetual-diag-strat">208 d</b></span>
+                  <span class="lake-chip">T_bot mean: <b id="perpetual-diag-tbot">6.1 °C</b></span>
+                </div>
+              </div>
+
+              <button type="button" id="btn-run-perpetual" class="btn btn-primary" style="width: 100%; margin-top: 0.75rem;">
+                Compute Cyclic Equilibrium
+              </button>
+
+              <div id="perpetual-status-box" class="api-status-box" style="display: none;">
+                <span id="perpetual-status-text">Ready</span>
               </div>
             </div>
 

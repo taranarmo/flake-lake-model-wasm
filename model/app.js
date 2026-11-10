@@ -216,6 +216,165 @@
     }
   };
 
+  const PERPETUAL_BENCHMARKS = {
+    mueggelsee: {
+      id: 'mueggelsee',
+      name: 'Lake Müggelsee / Stechlin',
+      location: 'Brandenburg, Germany',
+      regime: 'Dimictic',
+      depth: 7.5,
+      fetch: 2000.0,
+      clarity: 1.0,
+      lat: 52.0,
+      file: 'mueggelsee.json',
+      meanTair: 11.6,
+      description: 'Temperate polymictic/dimictic lake in Brandenburg, Germany. Historical FLake calibration and validation benchmark.'
+    },
+    sakhalin_reference: {
+      id: 'sakhalin_reference',
+      name: 'Sakhalin Reference Lake',
+      location: 'Far East, Russia',
+      regime: 'Dimictic',
+      depth: 7.5,
+      fetch: 2000.0,
+      clarity: 1.0,
+      lat: 49.0,
+      file: 'sakhalin_reference.json',
+      meanTair: 3.2,
+      description: 'Historical ground truth benchmark lake from IGB Berlin CGI FLAKEweb.exe validation suite.'
+    },
+    ladoga: {
+      id: 'ladoga',
+      name: 'Lake Ladoga',
+      location: 'Northwestern Russia',
+      regime: 'Dimictic',
+      depth: 51.0,
+      fetch: 80000.0,
+      clarity: 0.5,
+      lat: 60.0,
+      file: 'ladoga.json',
+      meanTair: 5.4,
+      description: 'Largest freshwater lake in Europe with extensive seasonal ice cover and deep hypolimnion.'
+    },
+    superior: {
+      id: 'superior',
+      name: 'Lake Superior',
+      location: 'USA / Canada',
+      regime: 'Oligomictic / Dimictic',
+      depth: 147.0,
+      fetch: 100000.0,
+      clarity: 0.25,
+      lat: 48.0,
+      file: 'superior.json',
+      meanTair: 5.8,
+      description: 'Deepest and coldest of the North American Great Lakes with vast thermal inertia.'
+    },
+    geneva: {
+      id: 'geneva',
+      name: 'Lake Geneva / Constance',
+      location: 'Switzerland / France',
+      regime: 'Warm Monomictic',
+      depth: 154.0,
+      fetch: 15000.0,
+      clarity: 0.4,
+      lat: 46.0,
+      file: 'geneva.json',
+      meanTair: 11.4,
+      description: 'Deep sub-alpine lake that remains ice-free year-round and circulates in winter.'
+    },
+    baikal: {
+      id: 'baikal',
+      name: 'Lake Baikal',
+      location: 'Siberia, Russia',
+      regime: 'Dimictic',
+      depth: 200.0,
+      fetch: 50000.0,
+      clarity: 0.2,
+      lat: 53.0,
+      file: 'baikal.json',
+      meanTair: 0.8,
+      description: 'Deepest ancient lake in the world; freezes December to May with crystal-clear ice cover.'
+    },
+    victoria: {
+      id: 'victoria',
+      name: 'Lake Victoria',
+      location: 'Uganda / Kenya / Tanzania',
+      regime: 'Warm Monomictic / Oligomictic',
+      depth: 40.0,
+      fetch: 60000.0,
+      clarity: 1.2,
+      lat: -1.0,
+      file: 'victoria.json',
+      meanTair: 23.4,
+      description: 'Tropical African Great Lake; warm year-round with seasonal wind-driven mixing.'
+    },
+    tahoe: {
+      id: 'tahoe',
+      name: 'Lake Tahoe',
+      location: 'Sierra Nevada, USA',
+      regime: 'Warm Monomictic',
+      depth: 300.0,
+      fetch: 18000.0,
+      clarity: 0.15,
+      lat: 39.0,
+      file: 'tahoe.json',
+      meanTair: 9.8,
+      description: 'Deep, ultra-oligotrophic alpine lake; never completely freezes.'
+    },
+    titicaca: {
+      id: 'titicaca',
+      name: 'Lake Titicaca',
+      location: 'Bolivia / Peru',
+      regime: 'Warm Monomictic',
+      depth: 107.0,
+      fetch: 30000.0,
+      clarity: 0.3,
+      lat: -16.0,
+      file: 'titicaca.json',
+      meanTair: 9.2,
+      description: 'High-altitude tropical lake at 3,812 m elevation with intense year-round solar forcing.'
+    },
+    chad: {
+      id: 'chad',
+      name: 'Lake Chad',
+      location: 'Chad / Nigeria',
+      regime: 'Polymictic',
+      depth: 4.0,
+      fetch: 5000.0,
+      clarity: 2.5,
+      lat: 12.0,
+      file: 'chad.json',
+      meanTair: 27.8,
+      description: 'Shallow, endorheic lake in the Sahel with frequent diurnal mixing and wind stirring.'
+    },
+    arctic_tundra: {
+      id: 'arctic_tundra',
+      name: 'Pechora Tundra Lake',
+      location: 'Russian Arctic',
+      regime: 'Cold Monomictic / Dimictic',
+      depth: 5.0,
+      fetch: 3000.0,
+      clarity: 1.0,
+      lat: 68.0,
+      file: 'arctic_tundra.json',
+      meanTair: -2.8,
+      description: 'High-latitude tundra lake with 8+ months of thick winter ice cover.'
+    },
+    mediterranean: {
+      id: 'mediterranean',
+      name: 'North African Lake',
+      location: 'Morocco / Mediterranean',
+      regime: 'Warm Monomictic',
+      depth: 12.0,
+      fetch: 4000.0,
+      clarity: 1.2,
+      lat: 34.0,
+      file: 'mediterranean.json',
+      meanTair: 18.2,
+      description: 'Warm Mediterranean climate lake with hot dry summers and mild winters.'
+    }
+  };
+
   const LAKE_PRESETS = {
     mueggelsee: { name: 'Müggelsee, Berlin', lat: 52.43, lon: 13.63, depth: 4.9, clarity: 1.2 },
     heiligensee: { name: 'Heiligensee, Berlin', lat: 52.60, lon: 13.22, depth: 4.5, clarity: 1.5 },
@@ -826,7 +985,9 @@
   }
 
   function getSimulatedDateString(dayOfYear, hourOfDay) {
-    let day = dayOfYear;
+    if (dayOfYear == null || isNaN(dayOfYear)) dayOfYear = 1;
+    if (hourOfDay == null || isNaN(hourOfDay)) hourOfDay = 0;
+    let day = Math.max(1, Math.min(365, Math.floor(dayOfYear)));
     let monthIdx = 0;
     for (let i = 0; i < DAYS_IN_MONTHS.length; i++) {
       if (day <= DAYS_IN_MONTHS[i]) {
@@ -835,8 +996,8 @@
       }
       day -= DAYS_IN_MONTHS[i];
     }
-    const h = hourOfDay.toString().padStart(2, '0');
-    return `Day ${dayOfYear} (${MONTHS[monthIdx]} ${day.toString().padStart(2, '0')}) ${h}:00`;
+    const h = Math.floor(hourOfDay).toString().padStart(2, '0');
+    return `Day ${Math.floor(dayOfYear)} (${MONTHS[monthIdx]} ${day.toString().padStart(2, '0')}) ${h}:00`;
   }
 
   /**
@@ -872,12 +1033,39 @@
     // Forcing Mode Tabs & Panels
     tabForcingManual: document.getElementById('tab-forcing-manual'),
     tabForcingCurated: document.getElementById('tab-forcing-curated'),
+    tabForcingPerpetual: document.getElementById('tab-forcing-perpetual'),
     tabForcingApi: document.getElementById('tab-forcing-api'),
     tabForcingCustom: document.getElementById('tab-forcing-custom'),
     panelForcingManual: document.getElementById('panel-forcing-manual'),
     panelForcingCurated: document.getElementById('panel-forcing-curated'),
+    panelForcingPerpetual: document.getElementById('panel-forcing-perpetual'),
     panelForcingApi: document.getElementById('panel-forcing-api'),
     panelForcingCustom: document.getElementById('panel-forcing-custom'),
+
+    // Perpetual Climatology Benchmark Controls
+    perpetualLakeSelect: document.getElementById('perpetual-lake-select'),
+    perpetualLakeCard: document.getElementById('perpetual-lake-card'),
+    perpetualName: document.getElementById('perpetual-name'),
+    perpetualRegimePill: document.getElementById('perpetual-regime-pill'),
+    perpetualDepth: document.getElementById('perpetual-depth'),
+    perpetualFetch: document.getElementById('perpetual-fetch'),
+    perpetualClarity: document.getElementById('perpetual-clarity'),
+    perpetualLat: document.getElementById('perpetual-lat'),
+    perpetualDesc: document.getElementById('perpetual-desc'),
+    perpetualTairMean: document.getElementById('perpetual-tair-mean'),
+    perpetualMaxCycles: document.getElementById('perpetual-max-cycles'),
+    perpetualTol: document.getElementById('perpetual-tol'),
+    perpetualConvergenceBox: document.getElementById('perpetual-convergence-box'),
+    perpetualCyclesBadge: document.getElementById('perpetual-cycles-badge'),
+    perpetualConvergenceText: document.getElementById('perpetual-convergence-text'),
+    perpetualDiagRegime: document.getElementById('perpetual-diag-regime'),
+    perpetualDiagIce: document.getElementById('perpetual-diag-ice'),
+    perpetualDiagHice: document.getElementById('perpetual-diag-hice'),
+    perpetualDiagStrat: document.getElementById('perpetual-diag-strat'),
+    perpetualDiagTbot: document.getElementById('perpetual-diag-tbot'),
+    btnRunPerpetual: document.getElementById('btn-run-perpetual'),
+    perpetualStatusBox: document.getElementById('perpetual-status-box'),
+    perpetualStatusText: document.getElementById('perpetual-status-text'),
 
     // Curated Benchmark Lakes Controls
     curatedLakeSelect: document.getElementById('curated-lake-select'),
@@ -1348,6 +1536,199 @@
       showCuratedStatus(`Error: ${err.message}`, "error");
     } finally {
       if (UI.btnLoadCurated) UI.btnLoadCurated.disabled = false;
+    }
+  }
+
+  function showPerpetualStatus(msg, type = '') {
+    if (!UI.perpetualStatusBox || !UI.perpetualStatusText) return;
+    if (!msg) {
+      UI.perpetualStatusBox.style.display = 'none';
+      return;
+    }
+    UI.perpetualStatusBox.style.display = 'flex';
+    UI.perpetualStatusBox.className = 'api-status-box' + (type ? ' ' + type : '');
+    UI.perpetualStatusText.textContent = msg;
+  }
+
+  function updatePerpetualLakeCard(lakeKey) {
+    const info = PERPETUAL_BENCHMARKS[lakeKey];
+    if (!info) return;
+    if (UI.perpetualName) UI.perpetualName.textContent = info.name;
+    if (UI.perpetualRegimePill) {
+      UI.perpetualRegimePill.textContent = info.regime;
+    }
+    if (UI.perpetualDepth) UI.perpetualDepth.textContent = `${info.depth.toFixed(1)} m`;
+    if (UI.perpetualFetch) UI.perpetualFetch.textContent = `${Math.round(info.fetch)} m`;
+    if (UI.perpetualClarity) UI.perpetualClarity.textContent = `${info.clarity.toFixed(1)} m⁻¹`;
+    if (UI.perpetualLat) UI.perpetualLat.textContent = `${info.lat.toFixed(1)}°N`;
+    if (UI.perpetualDesc) UI.perpetualDesc.textContent = info.description;
+    if (UI.perpetualTairMean) UI.perpetualTairMean.textContent = `T_air: ${info.meanTair.toFixed(1)} °C`;
+  }
+
+  async function fetchPerpetualLake(lakeKey) {
+    const info = PERPETUAL_BENCHMARKS[lakeKey];
+    if (!info) throw new Error("Unknown perpetual lake: " + lakeKey);
+
+    const candidatePaths = [
+      `data/perpetual/${info.file}`,
+      `assets/data/perpetual/${info.file}`,
+      `model/data/perpetual/${info.file}`
+    ];
+
+    let data = null;
+    let lastErr = null;
+    for (const p of candidatePaths) {
+      try {
+        const resp = await fetch(p);
+        if (resp.ok) {
+          data = await resp.json();
+          break;
+        }
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    if (!data) {
+      throw new Error(lastErr ? lastErr.message : `Failed to load perpetual dataset for ${info.name}`);
+    }
+    return data;
+  }
+
+  async function handleRunPerpetual() {
+    const lakeKey = UI.perpetualLakeSelect ? UI.perpetualLakeSelect.value : 'mueggelsee';
+    const lake = PERPETUAL_BENCHMARKS[lakeKey];
+    if (!lake) return;
+
+    if (UI.btnRunPerpetual) UI.btnRunPerpetual.disabled = true;
+    showPerpetualStatus(`Loading perpetual climatology and computing thermal equilibrium for ${lake.name}...`, "");
+
+    try {
+      const dataset = await fetchPerpetualLake(lakeKey);
+      if (!dataset.steps || dataset.steps.length === 0) {
+        throw new Error("Perpetual dataset contains no meteorological records.");
+      }
+
+      // Normalize compact step arrays [solar, Tair, ea, wind, cl] into uniform objects
+      const dtSec = dataset.timeStepSec || 10800.0;
+      const normalizedSteps = dataset.steps.map((s, idx) => {
+        const totalHours = Math.round((idx * dtSec) / 3600.0);
+        const dayOfYear = Math.floor(totalHours / 24.0) + 1;
+        const hourOfDay = totalHours % 24;
+        const timeStr = `Day ${dayOfYear} ${hourOfDay.toString().padStart(2, '0')}:00`;
+
+        if (Array.isArray(s)) {
+          return {
+            index: idx,
+            solar: s[0],
+            T_air: s[1],
+            ea: s[2],
+            wind: s[3],
+            cl: s[4],
+            del_time: dtSec,
+            dayOfYear,
+            hourOfDay,
+            timeStr
+          };
+        } else {
+          return {
+            ...s,
+            index: idx,
+            solar: s.solar != null ? s.solar : 0,
+            T_air: s.T_air != null ? s.T_air : (s.Tair != null ? s.Tair : 0),
+            ea: s.ea != null ? s.ea : 0,
+            wind: s.wind != null ? s.wind : 0,
+            cl: s.cl != null ? s.cl : 0,
+            del_time: s.del_time || dtSec,
+            dayOfYear: s.dayOfYear != null ? s.dayOfYear : dayOfYear,
+            hourOfDay: s.hourOfDay != null ? s.hourOfDay : hourOfDay,
+            timeStr: s.timeStr || timeStr
+          };
+        }
+      });
+
+      // Sync lake parameters
+      state.waterClarity = lake.clarity;
+      updateLakeDepth(lake.depth);
+      if (UI.selectClarity && lake.clarity != null) {
+        UI.selectClarity.value = lake.clarity.toString();
+      }
+
+      const maxCycles = UI.perpetualMaxCycles ? parseInt(UI.perpetualMaxCycles.value, 10) || 5 : 5;
+      const tol = UI.perpetualTol ? parseFloat(UI.perpetualTol.value) || 0.05 : 0.05;
+
+      const lakeMorph = {
+        depth: lake.depth,
+        fetch: lake.fetch,
+        extinWater: lake.clarity,
+        lat: lake.lat
+      };
+
+      const res = engine.runPerpetualYear(normalizedSteps, lakeMorph, {
+        maxIterations: maxCycles,
+        tol: tol,
+        del_time: dtSec
+      });
+
+      // Update convergence UI box
+      if (UI.perpetualConvergenceBox) {
+        UI.perpetualConvergenceBox.style.display = 'block';
+        if (UI.perpetualCyclesBadge) {
+          UI.perpetualCyclesBadge.textContent = `${res.cycles} ${res.cycles === 1 ? 'Cycle' : 'Cycles'}`;
+        }
+        if (UI.perpetualConvergenceText) {
+          const lastLog = res.iterationLog[res.iterationLog.length - 1];
+          const deltaStr = lastLog ? lastLog.deltaMax.toFixed(4) : tol.toFixed(4);
+          UI.perpetualConvergenceText.textContent = res.converged
+            ? `Cyclic equilibrium reached in ${res.cycles} cycles (final ΔT = ${deltaStr} °C ≤ tol ${tol} °C) in ${res.elapsedMs.toFixed(1)} ms.`
+            : `Completed ${res.cycles} annual cycles (final ΔT = ${deltaStr} °C).`;
+        }
+        if (UI.perpetualDiagRegime) UI.perpetualDiagRegime.textContent = res.regime.type;
+        if (UI.perpetualDiagIce) UI.perpetualDiagIce.textContent = `${res.diagnostics.iceDays} d`;
+        if (UI.perpetualDiagHice) UI.perpetualDiagHice.textContent = `${(res.diagnostics.maxHiceM * 100).toFixed(1)} cm`;
+        if (UI.perpetualDiagStrat) UI.perpetualDiagStrat.textContent = `${res.diagnostics.stratDays} d`;
+        if (UI.perpetualDiagTbot) UI.perpetualDiagTbot.textContent = `${res.diagnostics.meanTbot.toFixed(1)} °C`;
+      }
+
+      // Convert history to match dataset results format for timeline scrubber
+      state.isDatasetMode = true;
+      state.datasetSeries = normalizedSteps;
+      state.datasetResults = res.history;
+      state.datasetIndex = 0;
+      state.history = res.history;
+
+      if (UI.statTsfcMin) UI.statTsfcMin.textContent = `${res.diagnostics.minTsfc.toFixed(1)} °C`;
+      if (UI.statTsfcMax) UI.statTsfcMax.textContent = `${res.diagnostics.maxTsfc.toFixed(1)} °C`;
+      if (UI.statIceDays) UI.statIceDays.textContent = `${res.diagnostics.iceDays} d`;
+      if (UI.statSimTime) UI.statSimTime.textContent = `${res.elapsedMs.toFixed(1)} ms`;
+
+      if (UI.apiScrubber) {
+        UI.apiScrubber.max = res.history.length - 1;
+        UI.apiScrubber.value = 0;
+      }
+      if (UI.apiPlaybackBox) {
+        UI.apiPlaybackBox.style.display = 'flex';
+      }
+      if (UI.apiSourcePill) {
+        UI.apiSourcePill.style.display = 'inline-block';
+        UI.apiSourcePill.textContent = `Perpetual Equilibrium (${res.regime.type})`;
+        UI.apiSourcePill.style.color = '#10b981';
+        UI.apiSourcePill.style.background = 'rgba(16, 185, 129, 0.15)';
+        UI.apiSourcePill.style.borderColor = 'rgba(16, 185, 129, 0.35)';
+      }
+
+      showPerpetualStatus(`Equilibrium converged in ${res.cycles} cycles (${res.elapsedMs.toFixed(1)} ms, ${res.regime.type})`, "success");
+
+      // Pause continuous generator loop and show initial step
+      state.isRunning = false;
+      if (UI.btnPlay) UI.btnPlay.textContent = 'Run';
+      if (UI.clockDot) UI.clockDot.className = 'clock-dot paused';
+
+      applyDatasetStep(0);
+    } catch (err) {
+      console.error("Failed to run perpetual lake equilibrium:", err);
+      showPerpetualStatus(`Error: ${err.message}`, "error");
+    } finally {
+      if (UI.btnRunPerpetual) UI.btnRunPerpetual.disabled = false;
     }
   }
 
@@ -2210,12 +2591,11 @@
 
     state.datasetIndex = idx;
     UI.apiScrubber.value = idx;
-    UI.apiTimePill.textContent = res.timeStr;
-
     engine.setState(res);
     engine.simulatedHours = idx;
-    engine.dayOfYear = res.dayOfYear;
-    engine.hourOfDay = res.hourOfDay;
+    engine.dayOfYear = res.dayOfYear != null ? res.dayOfYear : 1;
+    engine.hourOfDay = res.hourOfDay != null ? res.hourOfDay : 0;
+    UI.apiTimePill.textContent = res.timeStr || getSimulatedDateString(engine.dayOfYear, engine.hourOfDay);
 
     updateTelemetry(res, forcing);
     renderLakeColumn();
@@ -2243,8 +2623,10 @@
     UI.regimeBadge.className = 'regime-badge ' + regime.badgeClass;
     UI.regimeDesc.textContent = regime.desc;
 
-    UI.valAirTemp.textContent = `${forcing.T_air.toFixed(1)} °C`;
-    UI.valSolar.textContent = `${Math.round(forcing.solar)} W/m²`;
+    const tAir = (forcing && forcing.T_air != null) ? forcing.T_air : (forcing && forcing.Tair != null ? forcing.Tair : state.baseAirTemp);
+    const sol = (forcing && forcing.solar != null) ? forcing.solar : state.baseSolar;
+    if (UI.valAirTemp) UI.valAirTemp.textContent = `${tAir.toFixed(1)} °C`;
+    if (UI.valSolar) UI.valSolar.textContent = `${Math.round(sol)} W/m²`;
   }
 
   function getDepthTickInterval(D) {
@@ -3517,6 +3899,10 @@
         handleLoadCuratedLake();
         return;
       }
+      if (state.forcingMode === 'perpetual' && (!state.datasetResults || state.datasetResults.length === 0)) {
+        handleRunPerpetual();
+        return;
+      }
       state.isRunning = !state.isRunning;
       UI.btnPlay.textContent = state.isRunning ? 'Pause' : 'Run';
       UI.clockDot.className = 'clock-dot' + (state.isRunning ? '' : ' paused');
@@ -3560,10 +3946,12 @@
         state.isDatasetMode = false;
         UI.tabForcingManual.classList.add('active');
         if (UI.tabForcingCurated) UI.tabForcingCurated.classList.remove('active');
+        if (UI.tabForcingPerpetual) UI.tabForcingPerpetual.classList.remove('active');
         if (UI.tabForcingApi) UI.tabForcingApi.classList.remove('active');
         if (UI.tabForcingCustom) UI.tabForcingCustom.classList.remove('active');
         UI.panelForcingManual.style.display = 'block';
         if (UI.panelForcingCurated) UI.panelForcingCurated.style.display = 'none';
+        if (UI.panelForcingPerpetual) UI.panelForcingPerpetual.style.display = 'none';
         if (UI.panelForcingApi) UI.panelForcingApi.style.display = 'none';
         if (UI.panelForcingCustom) UI.panelForcingCustom.style.display = 'none';
         if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'none';
@@ -3578,10 +3966,36 @@
         state.forcingMode = 'curated';
         UI.tabForcingCurated.classList.add('active');
         if (UI.tabForcingManual) UI.tabForcingManual.classList.remove('active');
+        if (UI.tabForcingPerpetual) UI.tabForcingPerpetual.classList.remove('active');
         if (UI.tabForcingApi) UI.tabForcingApi.classList.remove('active');
         if (UI.tabForcingCustom) UI.tabForcingCustom.classList.remove('active');
         UI.panelForcingCurated.style.display = 'block';
         if (UI.panelForcingManual) UI.panelForcingManual.style.display = 'none';
+        if (UI.panelForcingPerpetual) UI.panelForcingPerpetual.style.display = 'none';
+        if (UI.panelForcingApi) UI.panelForcingApi.style.display = 'none';
+        if (UI.panelForcingCustom) UI.panelForcingCustom.style.display = 'none';
+        if (state.datasetResults && state.datasetResults.length > 0) {
+          state.isDatasetMode = true;
+          if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'flex';
+        } else {
+          state.isRunning = false;
+          UI.btnPlay.textContent = 'Run';
+          UI.clockDot.className = 'clock-dot paused';
+        }
+      });
+    }
+
+    if (UI.tabForcingPerpetual) {
+      UI.tabForcingPerpetual.addEventListener('click', () => {
+        state.forcingMode = 'perpetual';
+        UI.tabForcingPerpetual.classList.add('active');
+        if (UI.tabForcingManual) UI.tabForcingManual.classList.remove('active');
+        if (UI.tabForcingCurated) UI.tabForcingCurated.classList.remove('active');
+        if (UI.tabForcingApi) UI.tabForcingApi.classList.remove('active');
+        if (UI.tabForcingCustom) UI.tabForcingCustom.classList.remove('active');
+        if (UI.panelForcingPerpetual) UI.panelForcingPerpetual.style.display = 'block';
+        if (UI.panelForcingManual) UI.panelForcingManual.style.display = 'none';
+        if (UI.panelForcingCurated) UI.panelForcingCurated.style.display = 'none';
         if (UI.panelForcingApi) UI.panelForcingApi.style.display = 'none';
         if (UI.panelForcingCustom) UI.panelForcingCustom.style.display = 'none';
         if (state.datasetResults && state.datasetResults.length > 0) {
@@ -3601,10 +4015,12 @@
         UI.tabForcingApi.classList.add('active');
         if (UI.tabForcingManual) UI.tabForcingManual.classList.remove('active');
         if (UI.tabForcingCurated) UI.tabForcingCurated.classList.remove('active');
+        if (UI.tabForcingPerpetual) UI.tabForcingPerpetual.classList.remove('active');
         if (UI.tabForcingCustom) UI.tabForcingCustom.classList.remove('active');
         UI.panelForcingApi.style.display = 'block';
         if (UI.panelForcingManual) UI.panelForcingManual.style.display = 'none';
         if (UI.panelForcingCurated) UI.panelForcingCurated.style.display = 'none';
+        if (UI.panelForcingPerpetual) UI.panelForcingPerpetual.style.display = 'none';
         if (UI.panelForcingCustom) UI.panelForcingCustom.style.display = 'none';
         if (geoPicker) {
           geoPicker.invalidate();
@@ -3626,10 +4042,12 @@
         UI.tabForcingCustom.classList.add('active');
         if (UI.tabForcingManual) UI.tabForcingManual.classList.remove('active');
         if (UI.tabForcingCurated) UI.tabForcingCurated.classList.remove('active');
+        if (UI.tabForcingPerpetual) UI.tabForcingPerpetual.classList.remove('active');
         if (UI.tabForcingApi) UI.tabForcingApi.classList.remove('active');
         UI.panelForcingCustom.style.display = 'block';
         if (UI.panelForcingManual) UI.panelForcingManual.style.display = 'none';
         if (UI.panelForcingCurated) UI.panelForcingCurated.style.display = 'none';
+        if (UI.panelForcingPerpetual) UI.panelForcingPerpetual.style.display = 'none';
         if (UI.panelForcingApi) UI.panelForcingApi.style.display = 'none';
         if (state.datasetResults && state.datasetResults.length > 0) {
           state.isDatasetMode = true;
@@ -3640,6 +4058,17 @@
           UI.clockDot.className = 'clock-dot paused';
         }
       });
+    }
+
+    // Perpetual Lake select change and run button
+    if (UI.perpetualLakeSelect) {
+      UI.perpetualLakeSelect.addEventListener('change', (e) => {
+        updatePerpetualLakeCard(e.target.value);
+      });
+    }
+
+    if (UI.btnRunPerpetual) {
+      UI.btnRunPerpetual.addEventListener('click', handleRunPerpetual);
     }
 
     // Curated Lake select change
@@ -3969,6 +4398,7 @@
 
       setupEventListeners();
       updateCuratedLakeCard('heiligensee');
+      updatePerpetualLakeCard('mueggelsee');
 
       // Hydrological year period label setup
       const hydroRange = getHydrologicalYearDates();

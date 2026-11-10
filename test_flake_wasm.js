@@ -113,6 +113,120 @@ async function runTests() {
   console.log(`  After 10 days of subzero forcing: hice=${(winterEngine.state.hice * 100).toFixed(2)} cm, Tsfc=${winterEngine.state.Tsfc.toFixed(2)}°C`);
   console.log("✓ Ice thermodynamics evaluated without error.");
 
+  // Test 6: Verification against Historical IGB Berlin CGI Ground Truth (01460140)
+  const cgiMeteoPath = path.join(__dirname, 'igb-flake-setup/000flake/flake/cgi-bin/01460140');
+  const cgiRsltPath = path.join(__dirname, 'igb-flake-setup/000flake/flake/cgi-bin/01460140.rslt');
+  if (fs.existsSync(cgiMeteoPath) && fs.existsSync(cgiRsltPath)) {
+    console.log("\n[Test 6] Verifying WASM simulation against historical IGB Berlin CGI ground truth (01460140)...");
+    const meteoLines = fs.readFileSync(cgiMeteoPath, 'utf8').trim().split('\n');
+    const rsltLines = fs.readFileSync(cgiRsltPath, 'utf8').trim().split('\n');
+
+    const cgiEngine = new FLakeEngine();
+    await cgiEngine.init();
+
+    // Lake configuration matching 01460140.nml:
+    // depth: 7.5m, fetch: 2000m, extinWater: 1.0, latitude: 49 deg N
+    cgiEngine.setLakeParameters({ depth: 7.5, fetch: 2000.0, extinWater: 1.0 });
+    const K = 273.15;
+    const mv = cgiEngine.memView;
+    const p = cgiEngine.ptrs;
+
+    // Coriolis for latitude 49 deg N
+    const coriolis = 2.0 * 7.292115e-5 * Math.sin((49.0 * Math.PI) / 180.0);
+    mv.setFloat64(p.par_Coriolis, coriolis, true);
+    mv.setFloat64(p.depth_bs, 3.0, true);
+    mv.setFloat64(p.T_bs, 4.0 + K, true);
+    mv.setFloat64(p.del_time, 10800.0, true);
+
+    // Initial conditions from 01460140.nml
+    const T0 = 3.17869863013699;
+    cgiEngine.setState({
+      Tsfc: T0,
+      TwML: T0,
+      Tbot: T0,
+      Tmnw: T0,
+      hML: 0.0,
+      CT: 0.5,
+      hice: 0.0,
+      Tice: 0.0,
+      hsnow: 0.0,
+      Tsnow: 0.0
+    });
+    mv.setFloat64(p.H_B1_in, 3.0, true);
+    mv.setFloat64(p.T_B1_in, 4.0 + K, true);
+
+    let maxDiffTs = 0;
+    let sumDiffTs = 0;
+    let nSteps = 0;
+    let maxDiffHice = 0;
+
+    for (let step = 1; step <= 2919; step++) {
+      const parts = meteoLines[step].trim().split(/\s+/).map(Number);
+      if (parts.length < 5) continue;
+      const [solar, Tair, ea, wind, cl] = parts;
+
+      const solarClamped = Math.max(0.0, solar);
+      const res = cgiEngine.step({
+        T_air: Tair,
+        solar: solarClamped,
+        wind: wind,
+        ea: ea,
+        cl: cl,
+        del_time: 10800.0
+      });
+
+      const refIdx = step + 2;
+      const refParts = rsltLines[refIdx].trim().split(/\s+/).map(Number);
+      const refTs = refParts[2];
+      const refHice = refParts[19];
+      const refTice = refParts[21];
+
+      const expectedTs = (refHice > 0.0) ? refTice : refTs;
+      const diffTs = Math.abs(res.Tsfc - expectedTs);
+      const diffHice = Math.abs(res.hice - refHice);
+
+      if (diffTs > maxDiffTs) maxDiffTs = diffTs;
+      if (diffHice > maxDiffHice) maxDiffHice = diffHice;
+      sumDiffTs += diffTs;
+      nSteps++;
+    }
+
+    const meanDiffTs = sumDiffTs / nSteps;
+    console.log(`  Evaluated ${nSteps} timesteps across full perpetual year:`);
+    console.log(`    Mean Tsfc error: ${meanDiffTs.toFixed(4)} °C`);
+    console.log(`    Max Ice thickness error: ${maxDiffHice.toFixed(4)} m`);
+    console.log(`    Final WASM Tsfc: ${cgiEngine.state.Tsfc.toFixed(2)} °C vs CGI ref: ${rsltLines[2921].trim().split(/\s+/)[2]} °C`);
+
+    assert(meanDiffTs < 1.5, `Mean Tsfc error exceeds tolerance: ${meanDiffTs} °C`);
+    assert(maxDiffHice < 0.15, `Max ice error exceeds tolerance: ${maxDiffHice} m`);
+    console.log("✓ WebAssembly simulation verified against original IGB Berlin CGI ground truth!");
+  }
+
+  // Test 7: Perpetual Year Equilibrium Solver
+  const perpetualPath = path.join(__dirname, 'model/data/perpetual/mueggelsee.json');
+  if (fs.existsSync(perpetualPath)) {
+    console.log("\n[Test 7] Running Perpetual Year Equilibrium Convergence Test (Lake Müggelsee)...");
+    const perpData = JSON.parse(fs.readFileSync(perpetualPath, 'utf8'));
+    const perpEngine = new FLakeEngine();
+    await perpEngine.init();
+
+    const perpRes = perpEngine.runPerpetualYear(perpData.steps, {
+      depth: 7.5,
+      fetch: 2000.0,
+      extinWater: 1.0,
+      lat: 52.0
+    }, { maxIterations: 5, tol: 0.05 });
+
+    console.log(`  Equilibrium converged in ${perpRes.cycles} annual cycles (${perpRes.elapsedMs.toFixed(1)} ms)`);
+    console.log(`  Limnological Thermal Regime: ${perpRes.regime.type}`);
+    console.log(`  Diagnostics: Tsfc [${perpRes.diagnostics.minTsfc} to ${perpRes.diagnostics.maxTsfc}] °C, Ice Days=${perpRes.diagnostics.iceDays} d, Max Ice=${(perpRes.diagnostics.maxHiceM * 100).toFixed(1)} cm`);
+
+    assert.strictEqual(perpRes.converged, true, "Perpetual simulation must converge to cyclic equilibrium");
+    assert.ok(perpRes.cycles <= 5, "Should converge within 5 iterations");
+    assert.strictEqual(perpRes.history.length, 2920, "Equilibrium history must contain full 2920 steps");
+    console.log("✓ Perpetual year equilibrium solver converged successfully.");
+  }
+
   console.log("\n==========================================");
   console.log(" ALL TESTS PASSED SUCCESSFULLY! ");
   console.log("==========================================");
