@@ -197,6 +197,12 @@ def main():
                 shutil.copy2(src_asset, os.path.join(dest_model, asset))
         print("  -> Copied model/ => _site/model/")
 
+    root_data_dir = os.path.join(SCRIPT_DIR, "data")
+    if os.path.exists(root_data_dir):
+        dest_root_data = os.path.join(OUTPUT_DIR, "data")
+        shutil.copytree(root_data_dir, dest_root_data, dirs_exist_ok=True)
+        print("  -> Copied data/ => _site/data/")
+
     # 8. Ensure Favicon and .nojekyll in _site/
     ensure_favicon()
     with open(os.path.join(OUTPUT_DIR, ".nojekyll"), "w", encoding="utf-8") as f:

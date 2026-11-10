@@ -325,6 +325,7 @@
                 </div>
                 <select id="perpetual-lake-select" class="api-select">
                   <option value="mueggelsee" selected>Lake Müggelsee / Stechlin (Germany, 52°N, 13°E)</option>
+                  <option value="custom_coords">🌍 Global Map Coordinates (Planetary Harmonic Climatology)...</option>
                   <option value="sakhalin_reference">Sakhalin Reference Lake (CGI Validation, 49°N, 145°E)</option>
                   <option value="ladoga">Lake Ladoga (Russia / Boreal, 60°N, 30°E)</option>
                   <option value="superior">Lake Superior (USA / Canada, 48°N, -87°E)</option>
@@ -337,6 +338,29 @@
                   <option value="arctic_tundra">Pechora Tundra Lake (Arctic, 68°N, 52°E)</option>
                   <option value="mediterranean">North African Lake (Mediterranean, 34°N, -6°E)</option>
                 </select>
+              </div>
+
+              <!-- Custom Global Coordinates & Map Container -->
+              <div id="perpetual-custom-coords-container" style="display: none; margin-bottom: 0.6rem;">
+                <div class="api-input-grid">
+                  <div>
+                    <div class="control-label-row">
+                      <span class="control-label">Latitude (°N)</span>
+                    </div>
+                    <input type="number" id="perpetual-lat-input" class="api-input" min="-90" max="90" step="0.01" value="52.43">
+                  </div>
+                  <div>
+                    <div class="control-label-row">
+                      <span class="control-label">Longitude (°E)</span>
+                    </div>
+                    <input type="number" id="perpetual-lon-input" class="api-input" min="-180" max="180" step="0.01" value="13.63">
+                  </div>
+                </div>
+                <div class="geo-picker-container" style="height: 180px; margin-top: 0.4rem; position: relative;">
+                  <canvas id="perpetual-geo-canvas" class="geo-picker-canvas"></canvas>
+                  <div id="perpetual-geo-coords" class="geo-map-coords">52.43°N, 13.63°E</div>
+                  <div id="perpetual-geo-tooltip" class="geo-map-tooltip" style="display: none;"></div>
+                </div>
               </div>
 
               <!-- Perpetual Info Card -->

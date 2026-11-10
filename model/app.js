@@ -1050,8 +1050,14 @@
     btnModalDismiss: document.getElementById('btn-modal-dismiss'),
     forcingModeModal: document.getElementById('forcing-mode-modal'),
 
-    // Perpetual Climatology Benchmark Controls
+    // Perpetual Climatology Benchmark & Custom Coordinates Controls
     perpetualLakeSelect: document.getElementById('perpetual-lake-select'),
+    perpetualCustomCoordsContainer: document.getElementById('perpetual-custom-coords-container'),
+    perpetualLatInput: document.getElementById('perpetual-lat-input'),
+    perpetualLonInput: document.getElementById('perpetual-lon-input'),
+    perpetualGeoCanvas: document.getElementById('perpetual-geo-canvas'),
+    perpetualGeoCoords: document.getElementById('perpetual-geo-coords'),
+    perpetualGeoTooltip: document.getElementById('perpetual-geo-tooltip'),
     perpetualLakeCard: document.getElementById('perpetual-lake-card'),
     perpetualName: document.getElementById('perpetual-name'),
     perpetualRegimePill: document.getElementById('perpetual-regime-pill'),
@@ -1253,8 +1259,157 @@
     }
   }
 
-  // Interactive Geographic Map Picker Instance
+  // Interactive Geographic Map Picker Instances & Planetary Harmonics Cache
   let geoPicker = null;
+  let perpetualGeoPicker = null;
+  let globalHarmonicsCache = null;
+
+  async function loadGlobalHarmonics() {
+    if (globalHarmonicsCache) return globalHarmonicsCache;
+    const paths = [
+      'data/climatology_harmonics.json',
+      'assets/data/climatology_harmonics.json',
+      'model/data/climatology_harmonics.json'
+    ];
+    for (const p of paths) {
+      try {
+        const resp = await fetch(p);
+        if (resp.ok) {
+          globalHarmonicsCache = await resp.json();
+          break;
+        }
+      } catch (e) {}
+    }
+    return globalHarmonicsCache;
+  }
+
+  function interpolateHarmonics(lat, lon, harmonicsData) {
+    if (!harmonicsData || !harmonicsData.grid || harmonicsData.grid.length === 0) {
+      return null;
+    }
+    const grid = harmonicsData.grid;
+    let nearest = [];
+    for (let i = 0; i < grid.length; i++) {
+      const g = grid[i];
+      const dLat = lat - g[0];
+      let dLon = Math.abs(lon - g[1]);
+      if (dLon > 180) dLon = 360 - dLon;
+      const dist = Math.hypot(dLat, dLon);
+      if (nearest.length < 4) {
+        nearest.push({ g, dist });
+        nearest.sort((a, b) => a.dist - b.dist);
+      } else if (dist < nearest[3].dist) {
+        nearest[3] = { g, dist };
+        nearest.sort((a, b) => a.dist - b.dist);
+      }
+    }
+
+    if (nearest[0].dist < 0.05) {
+      return nearest[0].g.slice(2);
+    }
+
+    let totalW = 0;
+    const weights = nearest.map(n => {
+      const w = 1.0 / Math.pow(Math.max(0.1, n.dist), 2);
+      totalW += w;
+      return w;
+    });
+
+    const numVars = 12; // a0..sigma_syn
+    const interp = new Array(numVars).fill(0);
+    for (let k = 0; k < numVars; k++) {
+      for (let j = 0; j < nearest.length; j++) {
+        interp[k] += nearest[j].g[2 + k] * (weights[j] / totalW);
+      }
+    }
+    return interp;
+  }
+
+  function generateHarmonicPerpetualSeries(lat, lon, params) {
+    const [a0, a1, b1, a2, b2, ad, bd, solarMean, windMean, eaMean, clMean, sigmaSyn] = params;
+    const phi = (lat * Math.PI) / 180.0;
+    const w1 = (2.0 * Math.PI) / 365.0;
+    const w2 = (4.0 * Math.PI) / 365.0;
+    const wd = (2.0 * Math.PI) / 1.0;
+
+    const dtSec = 10800.0; // 3 hours
+    const totalSteps = 2920; // 365 days
+    const steps = [];
+
+    const rho = 0.95;
+    const sigmaNoise = (sigmaSyn || 2.5) * Math.sqrt(1.0 - rho * rho);
+    let synNoise = 0.0;
+
+    // Two-pass solar radiation: compute diurnal-seasonal solar geometry and scale to exact annual solarMean
+    const rawSolar = new Float64Array(totalSteps);
+    let rawSolarSum = 0.0;
+    for (let i = 0; i < totalSteps; i++) {
+      const tHours = i * 3.0;
+      const tDays = tHours / 24.0;
+      const dayOfYear = ((Math.floor(tDays) + 305 - 1) % 365) + 1;
+      const hourOfDay = Math.floor(tHours % 24);
+      const decl = (23.45 * Math.PI / 180.0) * Math.sin(((2.0 * Math.PI * (dayOfYear - 81)) / 365.0));
+      const localSolarHour = (hourOfDay + lon / 15.0 + 24.0) % 24.0;
+      const hourAngle = ((localSolarHour - 12.0) * 15.0 * Math.PI) / 180.0;
+      const sinElev = Math.sin(phi) * Math.sin(decl) + Math.cos(phi) * Math.cos(decl) * Math.cos(hourAngle);
+      const sVal = Math.max(0.0, sinElev);
+      rawSolar[i] = sVal;
+      rawSolarSum += sVal;
+    }
+    const rawSolarMean = rawSolarSum / totalSteps;
+    const solarScale = rawSolarMean > 1e-4 ? (solarMean / rawSolarMean) : 0.0;
+
+    for (let i = 0; i < totalSteps; i++) {
+      const tHours = i * 3.0;
+      const tDays = tHours / 24.0;
+      const dayOfYear = ((Math.floor(tDays) + 305 - 1) % 365) + 1;
+      const hourOfDay = Math.floor(tHours % 24);
+
+      // AR(1) Gaussian perturbation using Box-Muller
+      const u1 = Math.max(1e-6, Math.random());
+      const u2 = Math.random();
+      const xi = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+      synNoise = rho * synNoise + sigmaNoise * xi;
+
+      const cos1 = Math.cos(w1 * tDays);
+      const sin1 = Math.sin(w1 * tDays);
+      const cos2 = Math.cos(w2 * tDays);
+      const sin2 = Math.sin(w2 * tDays);
+      const cosd = Math.cos(wd * tDays);
+      const sind = Math.sin(wd * tDays);
+
+      const tAir = a0 + (a1 * cos1 + b1 * sin1)
+                      + (a2 * cos2 + b2 * sin2)
+                      + (ad * cosd + bd * sind)
+                      + synNoise;
+
+      const solar = Math.max(0.0, Math.round(rawSolar[i] * solarScale * 10) / 10);
+      const windDiurn = 0.6 * Math.sin((hourOfDay * Math.PI) / 12);
+      const wind = Math.max(0.4, Math.round((windMean + windDiurn + 0.2 * xi) * 10) / 10);
+
+      const eSat = 6.112 * Math.exp((17.67 * tAir) / (tAir + 243.5));
+      const eSatRef = 6.112 * Math.exp((17.67 * a0) / (a0 + 243.5));
+      const ea = Math.max(0.5, Math.round(eaMean * (eSat / Math.max(0.1, eSatRef)) * 100) / 100);
+
+      const cl = Math.max(0.0, Math.min(1.0, Math.round((clMean + 0.1 * (synNoise / (sigmaSyn || 2.5))) * 100) / 100));
+      const timeStr = `Day ${dayOfYear} ${hourOfDay.toString().padStart(2, '0')}:00`;
+
+      steps.push({
+        index: i,
+        solar,
+        T_air: Math.round(tAir * 10) / 10,
+        ea,
+        wind,
+        cl,
+        del_time: dtSec,
+        dayOfYear,
+        hourOfDay,
+        timeStr
+      });
+    }
+
+    return { steps, timeStepSec: dtSec, params };
+  }
 
   // Canvas Contexts
   const ctxLake = UI.lakeCanvas.getContext('2d');
@@ -1598,6 +1753,23 @@
   }
 
   function updatePerpetualLakeCard(lakeKey) {
+    if (lakeKey === 'custom_coords') {
+      if (UI.perpetualCustomCoordsContainer) {
+        UI.perpetualCustomCoordsContainer.style.display = 'block';
+      }
+      if (perpetualGeoPicker) {
+        perpetualGeoPicker.invalidate();
+      }
+      const lat = parseFloat(UI.perpetualLatInput ? UI.perpetualLatInput.value : 52.43) || 52.43;
+      const lon = parseFloat(UI.perpetualLonInput ? UI.perpetualLonInput.value : 13.63) || 13.63;
+      updatePerpetualCustomClimatology(lat, lon);
+      return;
+    }
+
+    if (UI.perpetualCustomCoordsContainer) {
+      UI.perpetualCustomCoordsContainer.style.display = 'none';
+    }
+
     const info = PERPETUAL_BENCHMARKS[lakeKey];
     if (!info) return;
     if (UI.perpetualName) UI.perpetualName.textContent = info.name;
@@ -1610,6 +1782,47 @@
     if (UI.perpetualLat) UI.perpetualLat.textContent = `${info.lat.toFixed(1)}°N`;
     if (UI.perpetualDesc) UI.perpetualDesc.textContent = info.description;
     if (UI.perpetualTairMean) UI.perpetualTairMean.textContent = `T_air: ${info.meanTair.toFixed(1)} °C`;
+  }
+
+  function updatePerpetualCustomClimatology(lat, lon) {
+    if (UI.perpetualName) UI.perpetualName.textContent = `Custom Location (${lat.toFixed(2)}°N, ${lon.toFixed(2)}°E)`;
+    if (UI.perpetualDepth) UI.perpetualDepth.textContent = `${state.lakeDepth.toFixed(1)} m`;
+    if (UI.perpetualFetch) UI.perpetualFetch.textContent = '2000 m';
+    if (UI.perpetualClarity) UI.perpetualClarity.textContent = `${state.waterClarity.toFixed(1)} m⁻¹`;
+    if (UI.perpetualLat) UI.perpetualLat.textContent = `${lat.toFixed(1)}°N`;
+
+    if (globalHarmonicsCache) {
+      const harm = interpolateHarmonics(lat, lon, globalHarmonicsCache);
+      if (harm) {
+        const t0 = harm[0];
+        const a1 = Math.hypot(harm[1], harm[2]);
+        const wind = harm[8];
+        const solar = harm[7];
+
+        if (UI.perpetualTairMean) UI.perpetualTairMean.textContent = `T_air: ${t0.toFixed(1)} °C`;
+
+        let expRegime = 'Dimictic';
+        if (state.lakeDepth < 4.0) {
+          expRegime = 'Polymictic';
+        } else if (t0 - a1 >= 4.0) {
+          expRegime = 'Warm Monomictic';
+        } else if (t0 + a1 <= 4.0) {
+          expRegime = 'Cold Monomictic';
+        } else if (t0 - a1 <= 0.0 && t0 + a1 >= 4.0) {
+          expRegime = 'Dimictic';
+        } else {
+          expRegime = 'Polymictic';
+        }
+        if (UI.perpetualRegimePill) UI.perpetualRegimePill.textContent = expRegime;
+        if (UI.perpetualDesc) {
+          UI.perpetualDesc.textContent = `Planetary harmonic climatology interpolated from NOAA GDAS1. Annual range: ${(a1 * 2).toFixed(1)}°C, Mean Solar: ${Math.round(solar)} W/m², Mean Wind: ${wind.toFixed(1)} m/s.`;
+        }
+      }
+    } else {
+      if (UI.perpetualDesc) {
+        UI.perpetualDesc.textContent = `Custom global coordinates selected on interactive map. Ready to compute equilibrium climatology.`;
+      }
+    }
   }
 
   async function fetchPerpetualLake(lakeKey) {
@@ -1643,77 +1856,108 @@
 
   async function handleRunPerpetual() {
     const lakeKey = UI.perpetualLakeSelect ? UI.perpetualLakeSelect.value : 'mueggelsee';
-    const lake = PERPETUAL_BENCHMARKS[lakeKey];
-    if (!lake) return;
+    const isCustom = (lakeKey === 'custom_coords');
 
     if (UI.btnRunPerpetual) UI.btnRunPerpetual.disabled = true;
-    showPerpetualStatus(`Loading perpetual climatology and computing thermal equilibrium for ${lake.name}...`, "");
 
     try {
-      const dataset = await fetchPerpetualLake(lakeKey);
-      if (!dataset.steps || dataset.steps.length === 0) {
-        throw new Error("Perpetual dataset contains no meteorological records.");
-      }
+      let dataset = null;
+      let lakeMorph = null;
+      let lakeDisplayName = '';
 
-      // Normalize compact step arrays [solar, Tair, ea, wind, cl] into uniform objects
-      const dtSec = dataset.timeStepSec || 10800.0;
-      const normalizedSteps = dataset.steps.map((s, idx) => {
-        const totalHours = Math.round((idx * dtSec) / 3600.0);
-        const dayOfYear = Math.floor(totalHours / 24.0) + 1;
-        const hourOfDay = totalHours % 24;
-        const timeStr = `Day ${dayOfYear} ${hourOfDay.toString().padStart(2, '0')}:00`;
+      if (isCustom) {
+        const lat = parseFloat(UI.perpetualLatInput ? UI.perpetualLatInput.value : 52.43) || 52.43;
+        const lon = parseFloat(UI.perpetualLonInput ? UI.perpetualLonInput.value : 13.63) || 13.63;
+        lakeDisplayName = `Custom Location (${lat.toFixed(2)}°, ${lon.toFixed(2)}°)`;
+        showPerpetualStatus(`Interpolating global planetary climatology and computing thermal equilibrium for (${lat.toFixed(2)}°, ${lon.toFixed(2)}°)...`, "");
 
-        if (Array.isArray(s)) {
-          return {
-            index: idx,
-            solar: s[0],
-            T_air: s[1],
-            ea: s[2],
-            wind: s[3],
-            cl: s[4],
-            del_time: dtSec,
-            dayOfYear,
-            hourOfDay,
-            timeStr
-          };
-        } else {
-          return {
-            ...s,
-            index: idx,
-            solar: s.solar != null ? s.solar : 0,
-            T_air: s.T_air != null ? s.T_air : (s.Tair != null ? s.Tair : 0),
-            ea: s.ea != null ? s.ea : 0,
-            wind: s.wind != null ? s.wind : 0,
-            cl: s.cl != null ? s.cl : 0,
-            del_time: s.del_time || dtSec,
-            dayOfYear: s.dayOfYear != null ? s.dayOfYear : dayOfYear,
-            hourOfDay: s.hourOfDay != null ? s.hourOfDay : hourOfDay,
-            timeStr: s.timeStr || timeStr
-          };
+        const harmonicsData = await loadGlobalHarmonics();
+        if (!harmonicsData) {
+          throw new Error("Planetary harmonic climatology database could not be loaded.");
         }
-      });
+        const harmParams = interpolateHarmonics(lat, lon, harmonicsData);
+        if (!harmParams) {
+          throw new Error("Unable to interpolate harmonic parameters for coordinates.");
+        }
 
-      // Sync lake parameters
-      state.waterClarity = lake.clarity;
-      updateLakeDepth(lake.depth);
-      if (UI.selectClarity && lake.clarity != null) {
-        UI.selectClarity.value = lake.clarity.toString();
+        dataset = generateHarmonicPerpetualSeries(lat, lon, harmParams);
+        lakeMorph = {
+          depth: state.lakeDepth,
+          fetch: 2000.0,
+          extinWater: state.waterClarity,
+          lat
+        };
+      } else {
+        const lake = PERPETUAL_BENCHMARKS[lakeKey];
+        if (!lake) return;
+        lakeDisplayName = lake.name;
+        showPerpetualStatus(`Loading perpetual climatology and computing thermal equilibrium for ${lake.name}...`, "");
+
+        const rawDataset = await fetchPerpetualLake(lakeKey);
+        if (!rawDataset.steps || rawDataset.steps.length === 0) {
+          throw new Error("Perpetual dataset contains no meteorological records.");
+        }
+
+        const dtSec = rawDataset.timeStepSec || 10800.0;
+        const normalizedSteps = rawDataset.steps.map((s, idx) => {
+          const totalHours = Math.round((idx * dtSec) / 3600.0);
+          const dayOfYear = Math.floor(totalHours / 24.0) + 1;
+          const hourOfDay = totalHours % 24;
+          const timeStr = `Day ${dayOfYear} ${hourOfDay.toString().padStart(2, '0')}:00`;
+
+          if (Array.isArray(s)) {
+            return {
+              index: idx,
+              solar: s[0],
+              T_air: s[1],
+              ea: s[2],
+              wind: s[3],
+              cl: s[4],
+              del_time: dtSec,
+              dayOfYear,
+              hourOfDay,
+              timeStr
+            };
+          } else {
+            return {
+              ...s,
+              index: idx,
+              solar: s.solar != null ? s.solar : 0,
+              T_air: s.T_air != null ? s.T_air : (s.Tair != null ? s.Tair : 0),
+              ea: s.ea != null ? s.ea : 0,
+              wind: s.wind != null ? s.wind : 0,
+              cl: s.cl != null ? s.cl : 0,
+              del_time: s.del_time || dtSec,
+              dayOfYear: s.dayOfYear != null ? s.dayOfYear : dayOfYear,
+              hourOfDay: s.hourOfDay != null ? s.hourOfDay : hourOfDay,
+              timeStr: s.timeStr || timeStr
+            };
+          }
+        });
+
+        dataset = { steps: normalizedSteps, timeStepSec: dtSec };
+        lakeMorph = {
+          depth: lake.depth,
+          fetch: lake.fetch,
+          extinWater: lake.clarity,
+          lat: lake.lat
+        };
+
+        // Sync lake parameters
+        state.waterClarity = lake.clarity;
+        updateLakeDepth(lake.depth);
+        if (UI.selectClarity && lake.clarity != null) {
+          UI.selectClarity.value = lake.clarity.toString();
+        }
       }
 
       const maxCycles = UI.perpetualMaxCycles ? parseInt(UI.perpetualMaxCycles.value, 10) || 5 : 5;
       const tol = UI.perpetualTol ? parseFloat(UI.perpetualTol.value) || 0.05 : 0.05;
 
-      const lakeMorph = {
-        depth: lake.depth,
-        fetch: lake.fetch,
-        extinWater: lake.clarity,
-        lat: lake.lat
-      };
-
-      const res = engine.runPerpetualYear(normalizedSteps, lakeMorph, {
+      const res = engine.runPerpetualYear(dataset.steps, lakeMorph, {
         maxIterations: maxCycles,
         tol: tol,
-        del_time: dtSec
+        del_time: dataset.timeStepSec || 10800.0
       });
 
       // Update convergence UI box
@@ -1738,7 +1982,7 @@
 
       // Convert history to match dataset results format for timeline scrubber
       state.isDatasetMode = true;
-      state.datasetSeries = normalizedSteps;
+      state.datasetSeries = dataset.steps;
       state.datasetResults = res.history;
       state.datasetIndex = 0;
       state.history = res.history;
@@ -2359,10 +2603,19 @@
     const isNorth = lat >= 0;
     const phaseShift = isNorth ? 0 : Math.PI;
 
-    // Calibrated zonal temperature profile
+    // Calibrated zonal temperature profile, refined by global harmonics when available
     const absLat = Math.abs(lat);
-    const tMean = 27.0 - 0.15 * absLat - 0.0035 * (absLat * absLat);
-    const tAmp = Math.max(1.5, 1.5 + 0.16 * absLat + 0.0006 * (absLat * absLat));
+    let tMean = 27.0 - 0.15 * absLat - 0.0035 * (absLat * absLat);
+    let tAmp = Math.max(1.5, 1.5 + 0.16 * absLat + 0.0006 * (absLat * absLat));
+    let baseWindMean = 2.6;
+    if (globalHarmonicsCache) {
+      const harm = interpolateHarmonics(lat, lon, globalHarmonicsCache);
+      if (harm) {
+        tMean = harm[0];
+        tAmp = Math.hypot(harm[1], harm[2]);
+        if (harm[8] > 0) baseWindMean = harm[8];
+      }
+    }
 
     // Number of days to simulate
     let totalDays = 365;
@@ -2409,7 +2662,7 @@
       const isCyclone = synopticWave < -0.8;
 
       const cloudCover = isCyclone ? 0.85 : Math.max(0.1, 0.35 + 0.25 * Math.sin(dIdx * 0.45));
-      const baseWind = isCyclone ? 6.2 : Math.max(0.8, 2.6 + 1.1 * Math.sin(dIdx * 0.65));
+      const baseWind = isCyclone ? Math.max(5.5, baseWindMean * 1.8) : Math.max(0.8, baseWindMean + 1.1 * Math.sin(dIdx * 0.65));
 
       // Solar declination for this day of year
       const decl = (23.45 * Math.PI / 180.0) * Math.sin(((2.0 * Math.PI * (dayNum - 81)) / 365.0));
@@ -4048,6 +4301,9 @@
         if (UI.panelForcingApi) UI.panelForcingApi.style.display = 'none';
         if (UI.panelForcingCustom) UI.panelForcingCustom.style.display = 'none';
         updateForcingModeContext('perpetual');
+        if (perpetualGeoPicker) {
+          perpetualGeoPicker.invalidate();
+        }
         if (state.datasetResults && state.datasetResults.length > 0) {
           state.isDatasetMode = true;
           if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'flex';
@@ -4145,6 +4401,22 @@
 
     if (UI.btnRunPerpetual) {
       UI.btnRunPerpetual.addEventListener('click', handleRunPerpetual);
+    }
+
+    function handlePerpetualCoordsChange() {
+      const lat = parseFloat(UI.perpetualLatInput ? UI.perpetualLatInput.value : 52.43) || 52.43;
+      const lon = parseFloat(UI.perpetualLonInput ? UI.perpetualLonInput.value : 13.63) || 13.63;
+      if (perpetualGeoPicker) {
+        perpetualGeoPicker.setCoordinates(lat, lon);
+      }
+      updatePerpetualCustomClimatology(lat, lon);
+    }
+
+    if (UI.perpetualLatInput) {
+      UI.perpetualLatInput.addEventListener('change', handlePerpetualCoordsChange);
+    }
+    if (UI.perpetualLonInput) {
+      UI.perpetualLonInput.addEventListener('change', handlePerpetualCoordsChange);
     }
 
     // Curated Lake select change
@@ -4554,6 +4826,30 @@
       } catch (mapErr) {
         console.warn('Map picker initialization skipped:', mapErr);
       }
+
+      // Initialize perpetual coordinates map picker
+      try {
+        perpetualGeoPicker = new GeoLocationPicker({
+          canvas: UI.perpetualGeoCanvas,
+          coordsDisplay: UI.perpetualGeoCoords,
+          tooltip: UI.perpetualGeoTooltip,
+          initialLat: parseFloat(UI.perpetualLatInput?.value) || 52.43,
+          initialLon: parseFloat(UI.perpetualLonInput?.value) || 13.63,
+          onLocationChange: (lat, lon) => {
+            if (UI.perpetualLatInput) UI.perpetualLatInput.value = lat.toFixed(2);
+            if (UI.perpetualLonInput) UI.perpetualLonInput.value = lon.toFixed(2);
+            updatePerpetualCustomClimatology(lat, lon);
+          }
+        });
+        perpetualGeoPicker.init();
+      } catch (mapErr) {
+        console.warn('Perpetual map picker initialization skipped:', mapErr);
+      }
+
+      // Preload global planetary climatology harmonics in background
+      loadGlobalHarmonics().catch(err => {
+        console.warn('Background preload of climatology harmonics failed:', err);
+      });
 
       requestAnimationFrame(animationLoop);
     } catch (err) {
