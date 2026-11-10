@@ -44,7 +44,7 @@
 
       <!-- Simulation Execution Controls -->
       <div class="sim-controls" id="header-sim-controls">
-        <button id="btn-play" class="btn btn-primary" title="Toggle simulation play/pause">Pause</button>
+        <button id="btn-play" class="btn btn-primary" title="Toggle simulation play/pause">Run</button>
         <button id="btn-step" class="btn" title="Advance simulation by 1 hour">+1 hr</button>
         <button id="btn-day" class="btn" title="Advance simulation by 24 hours">+1 day</button>
         <button id="btn-reset" class="btn" title="Reset lake state to scenario defaults">Reset</button>
@@ -60,8 +60,8 @@
 
       <!-- Simulation Clock -->
       <div class="sim-clock">
-        <div id="clock-dot" class="clock-dot"></div>
-        <span id="clock-text">Initializing WASM...</span>
+        <div id="clock-dot" class="clock-dot paused"></div>
+        <span id="clock-text">FLake WASM Ready</span>
       </div>
     </div>
   </header>
@@ -84,7 +84,7 @@
     <div class="presets-container">
       <div class="presets-inner">
         <span class="presets-label">Scenarios:</span>
-        <button id="preset-summer" class="preset-chip active" title="Warm air, strong sun, stable thermal stratification">
+        <button id="preset-summer" class="preset-chip" title="Warm air, strong sun, stable thermal stratification">
           Summer Stratification
         </button>
         <button id="preset-autumn" class="preset-chip" title="Cool air, high wind, deepening mixed layer, turnover">
@@ -192,119 +192,22 @@
 
             <!-- Forcing Mode Tabs -->
             <div class="forcing-tabs">
-              <button type="button" id="tab-forcing-manual" class="forcing-tab active" title="Use manual sliders and diurnal/seasonal oscillations">
-                Manual
+              <button type="button" id="tab-forcing-api" class="forcing-tab active" title="Fetch live or historical ERA5 reanalysis weather data via Open-Meteo">
+                Weather API
               </button>
               <button type="button" id="tab-forcing-curated" class="forcing-tab" title="Load verified benchmark lake datasets (offline, published data)">
                 Curated
               </button>
-              <button type="button" id="tab-forcing-api" class="forcing-tab" title="Fetch live or historical ERA5 reanalysis weather data via Open-Meteo">
-                Weather API
-              </button>
               <button type="button" id="tab-forcing-custom" class="forcing-tab" title="Drag and drop or upload custom .dat or .csv meteorological data">
                 Custom File
               </button>
-            </div>
-
-            <!-- PANEL A: Manual Sliders (Default) -->
-            <div id="panel-forcing-manual">
-              <!-- Air Temperature -->
-              <div class="control-group">
-                <div class="control-label-row">
-                  <span class="control-label">Air Temperature (T_a)</span>
-                  <span id="val-airtemp" class="control-val-display">24.0 °C</span>
-                </div>
-                <input type="range" id="slider-airtemp" class="slider-input" min="-25" max="38" step="0.5" value="24.0">
-              </div>
-
-              <!-- Solar Radiation -->
-              <div class="control-group">
-                <div class="control-label-row">
-                  <span class="control-label">Solar Shortwave (I_atm)</span>
-                  <span id="val-solar" class="control-val-display">650 W/m²</span>
-                </div>
-                <input type="range" id="slider-solar" class="slider-input" min="0" max="950" step="10" value="650">
-              </div>
-
-              <!-- Wind Speed -->
-              <div class="control-group">
-                <div class="control-label-row">
-                  <span class="control-label">Wind Speed (10m)</span>
-                  <span id="val-wind" class="control-val-display">2.5 m/s</span>
-                </div>
-                <input type="range" id="slider-wind" class="slider-input" min="0.5" max="22" step="0.5" value="2.5">
-              </div>
-
-              <!-- Snowfall Rate -->
-              <div class="control-group">
-                <div class="control-label-row">
-                  <span class="control-label">Snow Precipitation</span>
-                  <span id="val-snow" class="control-val-display">0.0 mm/h</span>
-                </div>
-                <input type="range" id="slider-snow" class="slider-input" min="0" max="5" step="0.1" value="0">
-              </div>
-
-              <!-- Diurnal Variation Toggle -->
-              <div class="control-group" style="padding-top: 0.5rem; border-top: 1px solid var(--border-color);">
-                <label class="switch-label">
-                  <span>Diurnal Day / Night Cycle</span>
-                  <input type="checkbox" id="chk-diurnal" class="switch-input" checked>
-                </label>
-              </div>
-            </div>
-
-            <!-- PANEL B: Curated Lakes (Offline Benchmarks) -->
-            <div id="panel-forcing-curated" style="display: none;">
-              <div class="control-group">
-                <div class="control-label-row">
-                  <span class="control-label">Select Benchmark Lake</span>
-                </div>
-                <select id="curated-lake-select" class="api-select">
-                  <option value="heiligensee" selected>Heiligensee (Berlin) - Polymictic (4.5m)</option>
-                  <option value="mueggelsee">Müggelsee (Berlin) - Polymictic (4.9m)</option>
-                  <option value="stechlin">Stechlinsee (Brandenburg) - Dimictic (22.8m)</option>
-                  <option value="geneva">Lake Geneva / Léman - Monomictic (40.0m)</option>
-                  <option value="constance">Lake Constance / Bodensee - Monomictic (45.0m)</option>
-                  <option value="superior">Lake Superior - Cold Dimictic (50.0m)</option>
-                  <option value="baikal">Lake Baikal (Siberia) - Cold / Ice (744m)</option>
-                  <option value="tahoe">Lake Tahoe (Sierra Nevada) - Deep Alpine (50.0m)</option>
-                  <option value="victoria">Lake Victoria (East Africa) - Tropical (40.0m)</option>
-                  <option value="ladoga">Lake Ladoga (Northern Europe) - Cold / Ice (51.0m)</option>
-                  <option value="balaton">Lake Balaton (Hungary) - Shallow Steppe (3.2m)</option>
-                </select>
-              </div>
-
-              <!-- Lake Details Card -->
-              <div id="curated-lake-card" class="lake-info-card">
-                <div class="lake-info-title">
-                  <span id="curated-name">Heiligensee</span>
-                  <span id="curated-regime-pill" style="font-size: 0.7rem; background: #0284c7; color: #fff; padding: 2px 6px; border-radius: 4px;">Polymictic</span>
-                </div>
-                <div class="lake-meta-chips">
-                  <span class="lake-chip">Depth: <b id="curated-depth">4.5 m</b></span>
-                  <span class="lake-chip">Fetch: <b id="curated-fetch">2000 m</b></span>
-                  <span class="lake-chip">κ: <b id="curated-clarity">1.5 m⁻¹</b></span>
-                  <span class="lake-chip">Lat: <b id="curated-lat">52.60°N</b></span>
-                </div>
-                <div id="curated-desc" class="lake-desc-text">
-                  Small polymictic urban lake in Berlin with frequent mixing and winter ice cover.
-                </div>
-                <div id="curated-source" class="lake-source-tag">
-                  Source: DWD Potsdam Station (1980)
-                </div>
-              </div>
-
-              <button type="button" id="btn-load-curated" class="btn btn-primary" style="width: 100%; margin-top: 0.75rem;">
-                Load & Simulate Lake
+              <button type="button" id="tab-forcing-manual" class="forcing-tab" title="Use idealized synthetic weather, manual sliders, and diurnal oscillations">
+                Synthetic Data
               </button>
-
-              <div id="curated-status-box" class="api-status-box" style="display: none;">
-                <span id="curated-status-text">Ready</span>
-              </div>
             </div>
 
-            <!-- PANEL C: Open-Meteo API -->
-            <div id="panel-forcing-api" style="display: none;">
+            <!-- PANEL A: Open-Meteo API (Default) -->
+            <div id="panel-forcing-api">
               <!-- Location Presets / Custom -->
               <div class="control-group">
                 <div class="control-label-row">
@@ -396,7 +299,57 @@
               </div>
             </div>
 
-            <!-- PANEL D: Custom File Drag-and-Drop Upload -->
+            <!-- PANEL B: Curated Lakes (Offline Benchmarks) -->
+            <div id="panel-forcing-curated" style="display: none;">
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span class="control-label">Select Benchmark Lake</span>
+                </div>
+                <select id="curated-lake-select" class="api-select">
+                  <option value="heiligensee" selected>Heiligensee (Berlin) - Polymictic (4.5m)</option>
+                  <option value="mueggelsee">Müggelsee (Berlin) - Polymictic (4.9m)</option>
+                  <option value="stechlin">Stechlinsee (Brandenburg) - Dimictic (22.8m)</option>
+                  <option value="geneva">Lake Geneva / Léman - Monomictic (40.0m)</option>
+                  <option value="constance">Lake Constance / Bodensee - Monomictic (45.0m)</option>
+                  <option value="superior">Lake Superior - Cold Dimictic (50.0m)</option>
+                  <option value="baikal">Lake Baikal (Siberia) - Cold / Ice (744m)</option>
+                  <option value="tahoe">Lake Tahoe (Sierra Nevada) - Deep Alpine (50.0m)</option>
+                  <option value="victoria">Lake Victoria (East Africa) - Tropical (40.0m)</option>
+                  <option value="ladoga">Lake Ladoga (Northern Europe) - Cold / Ice (51.0m)</option>
+                  <option value="balaton">Lake Balaton (Hungary) - Shallow Steppe (3.2m)</option>
+                </select>
+              </div>
+
+              <!-- Lake Details Card -->
+              <div id="curated-lake-card" class="lake-info-card">
+                <div class="lake-info-title">
+                  <span id="curated-name">Heiligensee</span>
+                  <span id="curated-regime-pill" style="font-size: 0.7rem; background: #0284c7; color: #fff; padding: 2px 6px; border-radius: 4px;">Polymictic</span>
+                </div>
+                <div class="lake-meta-chips">
+                  <span class="lake-chip">Depth: <b id="curated-depth">4.5 m</b></span>
+                  <span class="lake-chip">Fetch: <b id="curated-fetch">2000 m</b></span>
+                  <span class="lake-chip">κ: <b id="curated-clarity">1.5 m⁻¹</b></span>
+                  <span class="lake-chip">Lat: <b id="curated-lat">52.60°N</b></span>
+                </div>
+                <div id="curated-desc" class="lake-desc-text">
+                  Small polymictic urban lake in Berlin with frequent mixing and winter ice cover.
+                </div>
+                <div id="curated-source" class="lake-source-tag">
+                  Source: DWD Potsdam Station (1980)
+                </div>
+              </div>
+
+              <button type="button" id="btn-load-curated" class="btn btn-primary" style="width: 100%; margin-top: 0.75rem;">
+                Load & Simulate Lake
+              </button>
+
+              <div id="curated-status-box" class="api-status-box" style="display: none;">
+                <span id="curated-status-text">Ready</span>
+              </div>
+            </div>
+
+            <!-- PANEL C: Custom File Drag-and-Drop Upload -->
             <div id="panel-forcing-custom" style="display: none;">
               <!-- Drop Zone -->
               <div id="custom-drop-zone" class="drop-zone" tabindex="0" role="button" aria-label="Drop meteorological forcing file here or click to browse">
@@ -449,6 +402,53 @@
 
               <div id="custom-status-box" class="api-status-box" style="display: none;">
                 <span id="custom-status-text">Ready</span>
+              </div>
+            </div>
+
+            <!-- PANEL D: Synthetic Data / Manual Sliders -->
+            <div id="panel-forcing-manual" style="display: none;">
+              <!-- Air Temperature -->
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span class="control-label">Air Temperature (T_a)</span>
+                  <span id="val-airtemp" class="control-val-display">24.0 °C</span>
+                </div>
+                <input type="range" id="slider-airtemp" class="slider-input" min="-25" max="38" step="0.5" value="24.0">
+              </div>
+
+              <!-- Solar Radiation -->
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span class="control-label">Solar Shortwave (I_atm)</span>
+                  <span id="val-solar" class="control-val-display">650 W/m²</span>
+                </div>
+                <input type="range" id="slider-solar" class="slider-input" min="0" max="950" step="10" value="650">
+              </div>
+
+              <!-- Wind Speed -->
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span class="control-label">Wind Speed (10m)</span>
+                  <span id="val-wind" class="control-val-display">2.5 m/s</span>
+                </div>
+                <input type="range" id="slider-wind" class="slider-input" min="0.5" max="22" step="0.5" value="2.5">
+              </div>
+
+              <!-- Snowfall Rate -->
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span class="control-label">Snow Precipitation</span>
+                  <span id="val-snow" class="control-val-display">0.0 mm/h</span>
+                </div>
+                <input type="range" id="slider-snow" class="slider-input" min="0" max="5" step="0.1" value="0">
+              </div>
+
+              <!-- Diurnal Variation Toggle -->
+              <div class="control-group" style="padding-top: 0.5rem; border-top: 1px solid var(--border-color);">
+                <label class="switch-label">
+                  <span>Diurnal Day / Night Cycle</span>
+                  <input type="checkbox" id="chk-diurnal" class="switch-input" checked>
+                </label>
               </div>
             </div>
 

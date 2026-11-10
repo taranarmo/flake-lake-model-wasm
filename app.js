@@ -12,7 +12,7 @@
   // Application State
   const state = {
     activeTab: 'simulation', // 'simulation' | 'calculator'
-    isRunning: true,
+    isRunning: false,
     speed: 10,               // steps per second
     lastStepTime: 0,
     preset: 'summer',
@@ -27,7 +27,7 @@
     qLw: null,               // auto
 
     // Forcing Mode & Dataset
-    forcingMode: 'manual',   // 'manual' | 'curated' | 'api' | 'custom'
+    forcingMode: 'api',      // 'api' | 'curated' | 'custom' | 'manual'
     isDatasetMode: false,
     datasetSeries: [],
     datasetResults: [],
@@ -2667,10 +2667,10 @@
     ctxHistory.fillRect(0, 0, width, height);
 
     if (history.length < 2) {
-      ctxHistory.fillStyle = '#4b5563';
+      ctxHistory.fillStyle = '#64748b';
       ctxHistory.font = '12px sans-serif';
       ctxHistory.textAlign = 'center';
-      ctxHistory.fillText('Accumulating time series data...', width / 2, height / 2);
+      ctxHistory.fillText('Ready. Click "Fetch & Simulate Real Weather" or "Run" to start simulation.', width / 2, height / 2);
       return;
     }
 
@@ -3152,13 +3152,15 @@
     requestAnimationFrame(animationLoop);
   }
 
-  function applyPreset(presetKey) {
+  function applyPreset(presetKey, switchTab = true) {
     state.preset = presetKey;
     state.annualCycle = (presetKey === 'annual');
     state.isDatasetMode = false;
     if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'none';
     if (UI.apiSourcePill) UI.apiSourcePill.style.display = 'none';
-    if (UI.tabForcingManual) {
+
+    if (switchTab && UI.tabForcingManual) {
+      state.forcingMode = 'manual';
       UI.tabForcingManual.classList.add('active');
       if (UI.tabForcingCurated) UI.tabForcingCurated.classList.remove('active');
       if (UI.tabForcingApi) UI.tabForcingApi.classList.remove('active');
@@ -3214,7 +3216,30 @@
     UI.valSnow.textContent = `${(state.snowRate * 3600.0).toFixed(1)} mm/h`;
 
     state.history = [];
-    stepSimulation();
+    const forcing = getInstantaneousForcing();
+    const res = engine.step(forcing);
+    state.history.push({
+      hour: engine.simulatedHours,
+      dayOfYear: engine.dayOfYear,
+      hourOfDay: engine.hourOfDay,
+      Tsfc: res.Tsfc,
+      TwML: res.TwML,
+      Tbot: res.Tbot,
+      Tmnw: res.Tmnw,
+      hML: res.hML,
+      hice: res.hice,
+      hsnow: res.hsnow,
+      Tair: forcing.T_air
+    });
+    updateTelemetry(res, forcing);
+    renderLakeColumn();
+    renderProfilePlot();
+    renderHistoryChart();
+
+    // Ensure model stays paused until user triggers run
+    state.isRunning = false;
+    if (UI.btnPlay) UI.btnPlay.textContent = 'Run';
+    if (UI.clockDot) UI.clockDot.className = 'clock-dot paused';
   }
 
   /**
@@ -3456,6 +3481,14 @@
 
     // Simulation Controls
     UI.btnPlay.addEventListener('click', () => {
+      if (state.forcingMode === 'api' && (!state.datasetResults || state.datasetResults.length === 0)) {
+        handleFetchApiWeather();
+        return;
+      }
+      if (state.forcingMode === 'curated' && (!state.datasetResults || state.datasetResults.length === 0)) {
+        handleLoadCuratedLake();
+        return;
+      }
       state.isRunning = !state.isRunning;
       UI.btnPlay.textContent = state.isRunning ? 'Pause' : 'Run';
       UI.clockDot.className = 'clock-dot' + (state.isRunning ? '' : ' paused');
@@ -3484,7 +3517,7 @@
       if (state.isDatasetMode) {
         applyDatasetStep(0);
       } else {
-        applyPreset(state.preset);
+        applyPreset(state.preset, false);
       }
     });
 
@@ -3507,9 +3540,8 @@
         if (UI.panelForcingCustom) UI.panelForcingCustom.style.display = 'none';
         if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'none';
         if (UI.apiSourcePill) UI.apiSourcePill.style.display = 'none';
-        state.isRunning = true;
-        UI.btnPlay.textContent = 'Pause';
-        UI.clockDot.className = 'clock-dot';
+        UI.btnPlay.textContent = state.isRunning ? 'Pause' : 'Run';
+        UI.clockDot.className = 'clock-dot' + (state.isRunning ? '' : ' paused');
       });
     }
 
@@ -3908,9 +3940,48 @@
       UI.clockText.textContent = 'FLake WASM Ready';
 
       setupEventListeners();
-      updateLakeDepth(state.lakeDepth);
       updateCuratedLakeCard('heiligensee');
-      applyPreset('summer');
+
+      // Initialize default API lake preset (Müggelsee)
+      if (LAKE_PRESETS && LAKE_PRESETS['mueggelsee']) {
+        const info = LAKE_PRESETS['mueggelsee'];
+        state.waterClarity = info.clarity;
+        if (UI.selectClarity) UI.selectClarity.value = info.clarity.toString();
+        engine.setLakeParameters({ extinWater: info.clarity });
+        updateLakeDepth(info.depth);
+      } else {
+        updateLakeDepth(state.lakeDepth);
+      }
+
+      // Sync slider inputs to default state values
+      if (UI.sliderAirTemp) UI.sliderAirTemp.value = state.baseAirTemp;
+      if (UI.valAirTemp) UI.valAirTemp.textContent = `${state.baseAirTemp.toFixed(1)} °C`;
+      if (UI.sliderSolar) UI.sliderSolar.value = state.baseSolar;
+      if (UI.valSolar) UI.valSolar.textContent = `${Math.round(state.baseSolar)} W/m²`;
+      if (UI.sliderWind) UI.sliderWind.value = state.baseWind;
+      if (UI.valWind) UI.valWind.textContent = `${state.baseWind.toFixed(1)} m/s`;
+      if (UI.sliderSnow) UI.sliderSnow.value = (state.snowRate * 3600.0).toFixed(1);
+      if (UI.valSnow) UI.valSnow.textContent = `${(state.snowRate * 3600.0).toFixed(1)} mm/h`;
+
+      // Set initial lake thermal profile without switching to manual/synthetic tab
+      engine.resetState('autumn');
+      const initForcing = {
+        T_air: 12.0,
+        solar: 180.0,
+        wind: 3.0,
+        snowRate: 0.0,
+        Q_lw: null
+      };
+      updateTelemetry(engine.state, initForcing);
+      renderLakeColumn();
+      renderProfilePlot();
+      renderHistoryChart();
+
+      // Ensure model does NOT run automatically on startup (user triggers it)
+      state.isRunning = false;
+      if (UI.btnPlay) UI.btnPlay.textContent = 'Run';
+      if (UI.clockDot) UI.clockDot.className = 'clock-dot paused';
+      if (UI.clockText) UI.clockText.textContent = 'FLake WASM Ready';
 
       // Initialize offline interactive location map picker
       try {
