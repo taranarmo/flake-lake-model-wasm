@@ -209,6 +209,21 @@
               </button>
             </div>
 
+            <!-- Mode Context Summary Banner -->
+            <div class="mode-context-banner" id="mode-context-banner">
+              <div class="mode-context-header">
+                <span class="mode-context-badge" id="mode-context-badge">
+                  <span class="mode-pill pill-api" id="mode-pill-badge">Weather API</span>
+                </span>
+                <button type="button" class="mode-guide-link" id="btn-open-mode-modal" title="Detailed comparison of atmospheric forcing modes">
+                  Mode Guide ↗
+                </button>
+              </div>
+              <div class="mode-context-desc" id="mode-context-desc">
+                Hourly reanalysis (ERA5) and weather forecasts for any coordinate globally via Open-Meteo & NASA POWER.
+              </div>
+            </div>
+
             <!-- PANEL A: Open-Meteo API (Default) -->
             <div id="panel-forcing-api">
               <!-- Location Presets / Custom -->
@@ -843,6 +858,90 @@
       • Repository: <a href="https://github.com/taranarmo/flake-lake-model" target="_blank" rel="noopener">taranarmo/flake-lake-model</a>
     </p>
   </footer>
+
+  <!-- Atmospheric Forcing Modes Guide Modal -->
+  <div id="forcing-mode-modal" class="modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="modal-forcing-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <h3 id="modal-forcing-title" style="margin: 0; font-size: 1.15rem; color: var(--text-main);">Atmospheric Forcing Modes</h3>
+          <p style="margin: 0.2rem 0 0; font-size: 0.8rem; color: var(--text-muted);">Compare meteorological driving engines for FLake simulations</p>
+        </div>
+        <button type="button" id="btn-close-mode-modal" class="modal-close-btn" aria-label="Close dialog">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-mode-grid">
+          <!-- Weather API -->
+          <div class="modal-mode-card">
+            <div class="modal-mode-title">
+              <span class="mode-pill pill-api">Weather API</span>
+              <strong>Real-World Reanalysis & Forecasts</strong>
+            </div>
+            <p>Fetches real hourly atmospheric time series for any latitude and longitude on Earth via Open-Meteo ERA5, NASA POWER, or offline analytical climatology.</p>
+            <div class="modal-mode-meta">
+              <span><b>Data Source:</b> Hourly ERA5 / DWD / ECMWF API</span>
+              <span><b>Best For:</b> Real-lake historical validation & short-term forecasting</span>
+            </div>
+          </div>
+
+          <!-- Perpetual Year -->
+          <div class="modal-mode-card">
+            <div class="modal-mode-title">
+              <span class="mode-pill pill-perpetual">Perpetual Year</span>
+              <strong>Cyclic Thermal Equilibrium</strong>
+            </div>
+            <p>Iterates a 1-year 3-hourly atmospheric cycle repeatedly until the water column converges to exact thermal equilibrium (|&Delta;T| &le; 0.05°C), classifying the natural limnological mixing regime (Dimictic, Monomictic, Polymictic).</p>
+            <div class="modal-mode-meta">
+              <span><b>Data Source:</b> GDAS1 / ERA5 representative annual climatologies</span>
+              <span><b>Best For:</b> Steady-state regime classification, mean ice duration, seasonal thermocline stability</span>
+            </div>
+          </div>
+
+          <!-- Curated Lakes -->
+          <div class="modal-mode-card">
+            <div class="modal-mode-title">
+              <span class="mode-pill pill-curated">Curated</span>
+              <strong>Benchmark Lake Observational Records</strong>
+            </div>
+            <p>Peer-reviewed observational meteorological datasets for iconic lakes (Müggelsee, Heiligensee, Stechlin, Geneva, Ladoga, Superior, etc.) with verified depth and clarity values.</p>
+            <div class="modal-mode-meta">
+              <span><b>Data Source:</b> Published scientific calibration records</span>
+              <span><b>Best For:</b> Academic verification, reproducing published FLake benchmarks</span>
+            </div>
+          </div>
+
+          <!-- Custom File -->
+          <div class="modal-mode-card">
+            <div class="modal-mode-title">
+              <span class="mode-pill pill-custom">Custom File</span>
+              <strong>User Meteorological Datasets (.dat / .csv)</strong>
+            </div>
+            <p>Upload your own local meteorological file via drag-and-drop. Automatically parses columns for solar radiation, air temperature, humidity, wind speed, and cloudiness.</p>
+            <div class="modal-mode-meta">
+              <span><b>Data Source:</b> Custom local tab-delimited or CSV data</span>
+              <span><b>Best For:</b> Running FLake on your own meteorological station measurements</span>
+            </div>
+          </div>
+
+          <!-- Synthetic Data -->
+          <div class="modal-mode-card">
+            <div class="modal-mode-title">
+              <span class="mode-pill pill-manual">Synthetic Data</span>
+              <strong>Idealized Diurnal & Manual Sliders</strong>
+            </div>
+            <p>Generate analytical sine-wave diurnal temperature cycles with interactive sliders for air temperature, solar flux, wind speed, and snowfall.</p>
+            <div class="modal-mode-meta">
+              <span><b>Data Source:</b> Idealized mathematical oscillations</span>
+              <span><b>Best For:</b> Physics demonstrations, sensitivity testing, student lab experiments</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="btn-modal-dismiss" class="btn btn-secondary">Got it</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Offline World Vector Geography -->
   <script src="world-geo.js"></script>

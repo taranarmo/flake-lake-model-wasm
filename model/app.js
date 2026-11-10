@@ -1042,6 +1042,14 @@
     panelForcingApi: document.getElementById('panel-forcing-api'),
     panelForcingCustom: document.getElementById('panel-forcing-custom'),
 
+    // Forcing Mode Context & Guide Modal
+    modePillBadge: document.getElementById('mode-pill-badge'),
+    modeContextDesc: document.getElementById('mode-context-desc'),
+    btnOpenModeModal: document.getElementById('btn-open-mode-modal'),
+    btnCloseModeModal: document.getElementById('btn-close-mode-modal'),
+    btnModalDismiss: document.getElementById('btn-modal-dismiss'),
+    forcingModeModal: document.getElementById('forcing-mode-modal'),
+
     // Perpetual Climatology Benchmark Controls
     perpetualLakeSelect: document.getElementById('perpetual-lake-select'),
     perpetualLakeCard: document.getElementById('perpetual-lake-card'),
@@ -1205,6 +1213,45 @@
     calcJsonOutput: document.getElementById('calc-json-output'),
     btnCopyJson: document.getElementById('btn-copy-json')
   };
+
+  const FORCING_MODE_INFO = {
+    api: {
+      name: 'Weather API',
+      badgeClass: 'pill-api',
+      desc: 'Hourly reanalysis (ERA5) and weather forecasts for any coordinate globally via Open-Meteo & NASA POWER.'
+    },
+    perpetual: {
+      name: 'Perpetual Year',
+      badgeClass: 'pill-perpetual',
+      desc: 'Repeats annual climatology across multiple cycles to solve for cyclic thermal equilibrium and limnological regime.'
+    },
+    curated: {
+      name: 'Curated Lakes',
+      badgeClass: 'pill-curated',
+      desc: 'Peer-reviewed observational meteorology and morphology datasets from iconic global lake calibration studies.'
+    },
+    custom: {
+      name: 'Custom File',
+      badgeClass: 'pill-custom',
+      desc: 'Upload or drag-and-drop local .dat or .csv meteorological time series for custom lake simulation.'
+    },
+    manual: {
+      name: 'Synthetic Data',
+      badgeClass: 'pill-manual',
+      desc: 'Idealized diurnal sinusoidal oscillations with interactive sliders for parameter sensitivity exploration.'
+    }
+  };
+
+  function updateForcingModeContext(mode) {
+    const info = FORCING_MODE_INFO[mode] || FORCING_MODE_INFO.api;
+    if (UI.modePillBadge) {
+      UI.modePillBadge.textContent = info.name;
+      UI.modePillBadge.className = `mode-pill ${info.badgeClass}`;
+    }
+    if (UI.modeContextDesc) {
+      UI.modeContextDesc.textContent = info.desc;
+    }
+  }
 
   // Interactive Geographic Map Picker Instance
   let geoPicker = null;
@@ -3956,6 +4003,7 @@
         if (UI.panelForcingCustom) UI.panelForcingCustom.style.display = 'none';
         if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'none';
         if (UI.apiSourcePill) UI.apiSourcePill.style.display = 'none';
+        updateForcingModeContext('manual');
         UI.btnPlay.textContent = state.isRunning ? 'Pause' : 'Run';
         UI.clockDot.className = 'clock-dot' + (state.isRunning ? '' : ' paused');
       });
@@ -3974,6 +4022,7 @@
         if (UI.panelForcingPerpetual) UI.panelForcingPerpetual.style.display = 'none';
         if (UI.panelForcingApi) UI.panelForcingApi.style.display = 'none';
         if (UI.panelForcingCustom) UI.panelForcingCustom.style.display = 'none';
+        updateForcingModeContext('curated');
         if (state.datasetResults && state.datasetResults.length > 0) {
           state.isDatasetMode = true;
           if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'flex';
@@ -3998,6 +4047,7 @@
         if (UI.panelForcingCurated) UI.panelForcingCurated.style.display = 'none';
         if (UI.panelForcingApi) UI.panelForcingApi.style.display = 'none';
         if (UI.panelForcingCustom) UI.panelForcingCustom.style.display = 'none';
+        updateForcingModeContext('perpetual');
         if (state.datasetResults && state.datasetResults.length > 0) {
           state.isDatasetMode = true;
           if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'flex';
@@ -4022,6 +4072,7 @@
         if (UI.panelForcingCurated) UI.panelForcingCurated.style.display = 'none';
         if (UI.panelForcingPerpetual) UI.panelForcingPerpetual.style.display = 'none';
         if (UI.panelForcingCustom) UI.panelForcingCustom.style.display = 'none';
+        updateForcingModeContext('api');
         if (geoPicker) {
           geoPicker.invalidate();
         }
@@ -4049,6 +4100,7 @@
         if (UI.panelForcingCurated) UI.panelForcingCurated.style.display = 'none';
         if (UI.panelForcingPerpetual) UI.panelForcingPerpetual.style.display = 'none';
         if (UI.panelForcingApi) UI.panelForcingApi.style.display = 'none';
+        updateForcingModeContext('custom');
         if (state.datasetResults && state.datasetResults.length > 0) {
           state.isDatasetMode = true;
           if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'flex';
@@ -4059,6 +4111,30 @@
         }
       });
     }
+
+    // Modal Guide Events
+    if (UI.btnOpenModeModal) {
+      UI.btnOpenModeModal.addEventListener('click', () => {
+        if (UI.forcingModeModal) UI.forcingModeModal.style.display = 'flex';
+      });
+    }
+
+    const closeModeModal = () => {
+      if (UI.forcingModeModal) UI.forcingModeModal.style.display = 'none';
+    };
+
+    if (UI.btnCloseModeModal) UI.btnCloseModeModal.addEventListener('click', closeModeModal);
+    if (UI.btnModalDismiss) UI.btnModalDismiss.addEventListener('click', closeModeModal);
+    if (UI.forcingModeModal) {
+      UI.forcingModeModal.addEventListener('click', (e) => {
+        if (e.target === UI.forcingModeModal) closeModeModal();
+      });
+    }
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && UI.forcingModeModal && UI.forcingModeModal.style.display === 'flex') {
+        closeModeModal();
+      }
+    });
 
     // Perpetual Lake select change and run button
     if (UI.perpetualLakeSelect) {
@@ -4399,6 +4475,7 @@
       setupEventListeners();
       updateCuratedLakeCard('heiligensee');
       updatePerpetualLakeCard('mueggelsee');
+      updateForcingModeContext('api');
 
       // Hydrological year period label setup
       const hydroRange = getHydrologicalYearDates();
