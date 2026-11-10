@@ -134,7 +134,39 @@ EOF
             type = "app";
             program = toString (pkgs.writeShellScript "serve-flake" ''
               echo "Serving FLake Lake Model website on http://localhost:8000 ..."
-              ${pkgs.python3}/bin/python3 -m http.server --directory ${site} 8000
+              exec ${pkgs.python3}/bin/python3 - << 'EOF'
+import http.server, socketserver, json
+
+DIRECTORY = "${site}"
+
+class SilentHealthCheckHandler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=DIRECTORY, **kwargs)
+
+    def do_GET(self):
+        if self.path in ("/api/status", "/api/status/", "/api/health"):
+            data = json.dumps({"status": "ok", "app": "flake-lake-model"}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
+        super().do_GET()
+
+    def log_message(self, format, *args):
+        # Silence repetitive health check requests from IDE / external pollers
+        if len(args) > 0 and any(h in str(args[0]) for h in ("/api/status", "/api/health")):
+            return
+        super().log_message(format, *args)
+
+socketserver.TCPServer.allow_reuse_address = True
+with socketserver.TCPServer(("0.0.0.0", 8000), SilentHealthCheckHandler) as httpd:
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        pass
+EOF
             '');
           };
         }

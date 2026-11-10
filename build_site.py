@@ -203,6 +203,13 @@ def main():
         f.write("# Disable Jekyll on GitHub Pages\n")
     print("  -> Created _site/.nojekyll and favicon")
 
+    # 9. Create static /api/status health endpoint
+    api_dir = os.path.join(OUTPUT_DIR, "api")
+    os.makedirs(api_dir, exist_ok=True)
+    with open(os.path.join(api_dir, "status"), "w", encoding="utf-8") as f:
+        f.write(json.dumps({"status": "ok", "app": "flake-lake-model"}) + "\n")
+    print("  -> Created _site/api/status endpoint")
+
     print("\n=== Website build completed successfully in _site/ ===")
 
 if __name__ == "__main__":

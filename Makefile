@@ -21,4 +21,4 @@ clean:
 	rm -rf _site result src/*.mod src/*.o src/*.ll
 
 serve: site
-	uv run python -m http.server -d _site 8000
+	uv run python scripts/serve.py _site 8000
