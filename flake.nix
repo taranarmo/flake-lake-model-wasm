@@ -4,9 +4,13 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/master";
     systems.url = "github:nix-systems/default";
+    flake-lake-model = {
+      url = "github:taranarmo/flake-lake-model";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, systems }:
+  outputs = { self, nixpkgs, systems, flake-lake-model }:
     let
       eachSystem = nixpkgs.lib.genAttrs (import systems);
     in {
@@ -23,13 +27,7 @@
             pname = "flake-wasm";
             version = "0.68.0";
 
-            src = pkgs.lib.cleanSourceWith {
-              src = ./.;
-              filter = path: type:
-                let base = baseNameOf path;
-                in (base == "src" || pkgs.lib.hasPrefix (toString ./src) path ||
-                    base == "flake-lake-model" || pkgs.lib.hasPrefix (toString ./flake-lake-model) path);
-            };
+            src = "${flake-lake-model}/src";
 
             nativeBuildInputs = [
               pkgs.lfortran
@@ -40,7 +38,6 @@
 
             buildPhase = ''
               runHook preBuild
-              cd src
 
               echo "Compiling Fortran 90 modules..."
               for mod in data_parameters.f90 flake_derivedtypes.f90 flake_parameters.f90 \
@@ -86,6 +83,7 @@ EOF
                     || base == "_site"
                     || base == "dist"
                     || base == "build"
+                    || base == "flake-lake-model"
                     || pkgs.lib.hasSuffix ".zip" base);
             };
 
