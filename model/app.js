@@ -839,6 +839,27 @@
     return `Day ${dayOfYear} (${MONTHS[monthIdx]} ${day.toString().padStart(2, '0')}) ${h}:00`;
   }
 
+  /**
+   * Calculates the date boundaries for the latest complete hydrological year (water year).
+   * A hydrological year in the Northern Hemisphere starts October 1st and ends September 30th.
+   * If current date is past Oct 5, the hydrological year ending Sep 30 of the current calendar year is complete.
+   * Otherwise, the hydrological year ending Sep 30 of the previous calendar year is used.
+   */
+  function getHydrologicalYearDates(refDate = new Date()) {
+    const year = refDate.getUTCFullYear ? refDate.getUTCFullYear() : refDate.getFullYear();
+    const month = refDate.getUTCMonth ? refDate.getUTCMonth() : refDate.getMonth(); // 0 = Jan, 9 = Oct
+    const date = refDate.getUTCDate ? refDate.getUTCDate() : refDate.getDate();
+
+    let endYear = year;
+    if (month < 9 || (month === 9 && date < 5)) {
+      endYear = year - 1;
+    }
+    const startYear = endYear - 1;
+    const startD = new Date(Date.UTC(startYear, 9, 1, 0, 0, 0));
+    const endD = new Date(Date.UTC(endYear, 8, 30, 23, 59, 59));
+    return { startYear, endYear, startD, endD };
+  }
+
   // DOM Elements
   const UI = {
     // Mode tabs
@@ -1695,15 +1716,14 @@
     const now = new Date();
 
     const fmt = d => {
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
+      const y = d.getUTCFullYear();
+      const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(d.getUTCDate()).padStart(2, '0');
       return `${y}-${m}-${day}`;
     };
 
     if (period === 'pastYear' || period === 'latestYear') {
-      const endD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-      const startD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 365);
+      const { startD, endD } = getHydrologicalYearDates(now);
       url = `https://archive-api.open-meteo.com/v1/era5?latitude=${lat}&longitude=${lon}&start_date=${fmt(startD)}&end_date=${fmt(endD)}&hourly=temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,shortwave_radiation,cloud_cover,snowfall&wind_speed_unit=ms`;
     } else if (period === '2024') {
       url = `https://archive-api.open-meteo.com/v1/era5?latitude=${lat}&longitude=${lon}&start_date=2024-01-01&end_date=2024-12-31&hourly=temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,shortwave_radiation,cloud_cover,snowfall&wind_speed_unit=ms`;
@@ -1796,16 +1816,15 @@
   async function fetchNasaPowerSeries(lat, lon, period) {
     const now = new Date();
     const fmt = d => {
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
+      const y = d.getUTCFullYear();
+      const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(d.getUTCDate()).padStart(2, '0');
       return `${y}${m}${day}`;
     };
 
     let startStr = '', endStr = '';
     if (period === 'pastYear' || period === 'latestYear') {
-      const endD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 3);
-      const startD = new Date(endD.getFullYear(), endD.getMonth(), endD.getDate() - 365);
+      const { startD, endD } = getHydrologicalYearDates(now);
       startStr = fmt(startD);
       endStr = fmt(endD);
     } else if (period === '2024') {
@@ -1923,7 +1942,13 @@
     let startDate;
 
     if (period === 'pastYear' || period === 'latestYear') {
-      startDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() - 365));
+      const { startD, endD } = getHydrologicalYearDates(now);
+      startDate = startD;
+      totalDays = Math.round((endD.getTime() - startD.getTime()) / (86400 * 1000)) + 1;
+    } else if (period === 'climatology') {
+      const { startD, endD } = getHydrologicalYearDates(now);
+      startDate = startD;
+      totalDays = Math.round((endD.getTime() - startD.getTime()) / (86400 * 1000)) + 1;
     } else if (period === 'recent30') {
       totalDays = 30;
       startDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() - 30));
@@ -2031,7 +2056,10 @@
       return;
     }
 
-    const cacheId = `api:${lat.toFixed(2)}:${lon.toFixed(2)}:${period}`;
+    const hydroRange = getHydrologicalYearDates();
+    const cacheId = (period === 'pastYear' || period === 'latestYear')
+      ? `api:${lat.toFixed(2)}:${lon.toFixed(2)}:${period}:${hydroRange.startYear}-${hydroRange.endYear}`
+      : `api:${lat.toFixed(2)}:${lon.toFixed(2)}:${period}`;
     UI.btnFetchApi.disabled = true;
 
     try {
@@ -3941,6 +3969,15 @@
 
       setupEventListeners();
       updateCuratedLakeCard('heiligensee');
+
+      // Hydrological year period label setup
+      const hydroRange = getHydrologicalYearDates();
+      if (UI.apiPeriod) {
+        const hydroOpt = UI.apiPeriod.querySelector('option[value="pastYear"]');
+        if (hydroOpt) {
+          hydroOpt.textContent = `Latest Hydrological Year (${hydroRange.startYear}-10-01 to ${hydroRange.endYear}-09-30 - 8,760 hrs)`;
+        }
+      }
 
       // Initialize default API lake preset (Müggelsee)
       if (LAKE_PRESETS && LAKE_PRESETS['mueggelsee']) {
