@@ -43,7 +43,8 @@
     maxHistoryLength: 8760,
 
     // Latest direct calculation result
-    lastCalcResult: null
+    lastCalcResult: null,
+    hoverHistoryIndex: null
   };
 
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -1055,6 +1056,7 @@
     perpetualCustomCoordsContainer: document.getElementById('perpetual-custom-coords-container'),
     perpetualLatInput: document.getElementById('perpetual-lat-input'),
     perpetualLonInput: document.getElementById('perpetual-lon-input'),
+    perpetualElevationInput: document.getElementById('perpetual-elevation-input'),
     perpetualGeoCanvas: document.getElementById('perpetual-geo-canvas'),
     perpetualGeoCoords: document.getElementById('perpetual-geo-coords'),
     perpetualGeoTooltip: document.getElementById('perpetual-geo-tooltip'),
@@ -1283,7 +1285,7 @@
     return globalHarmonicsCache;
   }
 
-  function interpolateHarmonics(lat, lon, harmonicsData) {
+  function interpolateHarmonics(lat, lon, harmonicsData, elevationM = 0) {
     if (!harmonicsData || !harmonicsData.grid || harmonicsData.grid.length === 0) {
       return null;
     }
@@ -1294,7 +1296,9 @@
       const dLat = lat - g[0];
       let dLon = Math.abs(lon - g[1]);
       if (dLon > 180) dLon = 360 - dLon;
-      const dist = Math.hypot(dLat, dLon);
+      // Account for longitude convergence with latitude for true geographical metric distance
+      const cosLat = Math.cos(((lat + g[0]) * 0.5 * Math.PI) / 180.0);
+      const dist = Math.hypot(dLat, dLon * cosLat);
       if (nearest.length < 4) {
         nearest.push({ g, dist });
         nearest.sort((a, b) => a.dist - b.dist);
@@ -1304,28 +1308,44 @@
       }
     }
 
+    let interp;
     if (nearest[0].dist < 0.05) {
-      return nearest[0].g.slice(2);
-    }
+      interp = nearest[0].g.slice(2);
+    } else {
+      let totalW = 0;
+      const weights = nearest.map(n => {
+        const w = 1.0 / Math.pow(Math.max(0.1, n.dist), 2);
+        totalW += w;
+        return w;
+      });
 
-    let totalW = 0;
-    const weights = nearest.map(n => {
-      const w = 1.0 / Math.pow(Math.max(0.1, n.dist), 2);
-      totalW += w;
-      return w;
-    });
-
-    const numVars = 12; // a0..sigma_syn
-    const interp = new Array(numVars).fill(0);
-    for (let k = 0; k < numVars; k++) {
-      for (let j = 0; j < nearest.length; j++) {
-        interp[k] += nearest[j].g[2 + k] * (weights[j] / totalW);
+      const numVars = 12; // a0..sigma_syn
+      interp = new Array(numVars).fill(0);
+      for (let k = 0; k < numVars; k++) {
+        for (let j = 0; j < nearest.length; j++) {
+          interp[k] += nearest[j].g[2 + k] * (weights[j] / totalW);
+        }
       }
     }
+
+    // Environmental lapse rate correction (-6.5 °C / 1000 m ASL)
+    if (elevationM && !isNaN(elevationM)) {
+      interp[0] = interp[0] - 0.0065 * elevationM;
+    }
+
     return interp;
   }
 
-  function generateHarmonicPerpetualSeries(lat, lon, params) {
+  function mulberry32(a) {
+    return function() {
+      let t = a += 0x6D2B79F5;
+      t = Math.imul(t ^ t >>> 15, t | 1);
+      t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  function generateHarmonicPerpetualSeries(lat, lon, params, options = {}) {
     const [a0, a1, b1, a2, b2, ad, bd, solarMean, windMean, eaMean, clMean, sigmaSyn] = params;
     const phi = (lat * Math.PI) / 180.0;
     const w1 = (2.0 * Math.PI) / 365.0;
@@ -1340,13 +1360,20 @@
     const sigmaNoise = (sigmaSyn || 2.5) * Math.sqrt(1.0 - rho * rho);
     let synNoise = 0.0;
 
+    // Seeded PRNG for reproducible runs across runs
+    const seed = options.seed !== undefined
+      ? (options.seed >>> 0)
+      : ((Math.round((lat + 90) * 1000) * 360000 + Math.round((lon + 180) * 1000)) >>> 0);
+    const rng = mulberry32(seed);
+
     // Two-pass solar radiation: compute diurnal-seasonal solar geometry and scale to exact annual solarMean
+    // All yearly seasons start at hydrological year begin: Oct 1st (dayOfYear = 274, 273 days after Jan 1 00:00)
     const rawSolar = new Float64Array(totalSteps);
     let rawSolarSum = 0.0;
     for (let i = 0; i < totalSteps; i++) {
       const tHours = i * 3.0;
       const tDays = tHours / 24.0;
-      const dayOfYear = ((Math.floor(tDays) + 305 - 1) % 365) + 1;
+      const dayOfYear = ((Math.floor(273.0 + tDays)) % 365) + 1;
       const hourOfDay = Math.floor(tHours % 24);
       const decl = (23.45 * Math.PI / 180.0) * Math.sin(((2.0 * Math.PI * (dayOfYear - 81)) / 365.0));
       const localSolarHour = (hourOfDay + lon / 15.0 + 24.0) % 24.0;
@@ -1362,19 +1389,29 @@
     for (let i = 0; i < totalSteps; i++) {
       const tHours = i * 3.0;
       const tDays = tHours / 24.0;
-      const dayOfYear = ((Math.floor(tDays) + 305 - 1) % 365) + 1;
+      const tCalDays = (273.0 + tDays) % 365.0;
+      const dayOfYear = ((Math.floor(273.0 + tDays)) % 365) + 1;
       const hourOfDay = Math.floor(tHours % 24);
+      const virtualYr = (273.0 + tDays) < 365.0 ? 2025 : 2026;
+      const dObj = new Date(Date.UTC(virtualYr, 0, dayOfYear, hourOfDay));
+      const mo = dObj.getUTCMonth();
+      const da = dObj.getUTCDate();
+      const moStr = String(mo + 1).padStart(2, '0');
+      const daStr = String(da).padStart(2, '0');
+      const hrStr = String(hourOfDay).padStart(2, '0');
+      const dateStr = `${virtualYr}-${moStr}-${daStr}`;
+      const timeStr = `${MONTHS[mo]} ${da} ${hrStr}:00 (Day ${dayOfYear})`;
 
-      // AR(1) Gaussian perturbation using Box-Muller
-      const u1 = Math.max(1e-6, Math.random());
-      const u2 = Math.random();
+      // AR(1) Gaussian perturbation using Box-Muller with seeded RNG
+      const u1 = Math.max(1e-6, rng());
+      const u2 = rng();
       const xi = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
       synNoise = rho * synNoise + sigmaNoise * xi;
 
-      const cos1 = Math.cos(w1 * tDays);
-      const sin1 = Math.sin(w1 * tDays);
-      const cos2 = Math.cos(w2 * tDays);
-      const sin2 = Math.sin(w2 * tDays);
+      const cos1 = Math.cos(w1 * tCalDays);
+      const sin1 = Math.sin(w1 * tCalDays);
+      const cos2 = Math.cos(w2 * tCalDays);
+      const sin2 = Math.sin(w2 * tCalDays);
       const cosd = Math.cos(wd * tDays);
       const sind = Math.sin(wd * tDays);
 
@@ -1392,7 +1429,14 @@
       const ea = Math.max(0.5, Math.round(eaMean * (eSat / Math.max(0.1, eSatRef)) * 100) / 100);
 
       const cl = Math.max(0.0, Math.min(1.0, Math.round((clMean + 0.1 * (synNoise / (sigmaSyn || 2.5))) * 100) / 100));
-      const timeStr = `Day ${dayOfYear} ${hourOfDay.toString().padStart(2, '0')}:00`;
+
+      // Snowfall estimate: episodic snowfall during winter cyclonic disturbances (subzero temp + high cloud cover)
+      // Produces physically realistic 20-40 cm seasonal snow insulation over ice cover
+      let snowRate = 0.0;
+      if (tAir <= 0.5 && cl > 0.65 && synNoise > 0.3) {
+        const precipMmH = 0.05 * (cl - 0.55) * (1.0 + Math.min(3.0, synNoise));
+        snowRate = Math.max(0.0, precipMmH / 3600.0);
+      }
 
       steps.push({
         index: i,
@@ -1401,9 +1445,11 @@
         ea,
         wind,
         cl,
+        snowRate: Math.round(snowRate * 1000000) / 1000000,
         del_time: dtSec,
         dayOfYear,
         hourOfDay,
+        dateStr,
         timeStr
       });
     }
@@ -1435,9 +1481,10 @@
 
     if (state.annualCycle) {
       const day = engine.dayOfYear;
-      const annualPhase = (2 * Math.PI * (day - 110)) / 365;
-      airTemp = 10.0 + 15.0 * Math.sin(annualPhase);
-      const maxSolarSeason = 300.0 + 350.0 * Math.sin(annualPhase);
+      // Day 205 (late July) is peak summer warmth, day 23 (mid-January) is coldest
+      const annualPhase = (2 * Math.PI * (day - 205)) / 365;
+      airTemp = 10.0 + 15.0 * Math.cos(annualPhase);
+      const maxSolarSeason = 300.0 + 350.0 * Math.cos(annualPhase);
       solar = Math.max(0, maxSolarSeason);
     }
 
@@ -1753,25 +1800,33 @@
   }
 
   function updatePerpetualLakeCard(lakeKey) {
+    if (UI.perpetualCustomCoordsContainer) {
+      UI.perpetualCustomCoordsContainer.style.display = 'block';
+    }
+
     if (lakeKey === 'custom_coords') {
-      if (UI.perpetualCustomCoordsContainer) {
-        UI.perpetualCustomCoordsContainer.style.display = 'block';
-      }
-      if (perpetualGeoPicker) {
-        perpetualGeoPicker.invalidate();
-      }
       const lat = parseFloat(UI.perpetualLatInput ? UI.perpetualLatInput.value : 52.43) || 52.43;
       const lon = parseFloat(UI.perpetualLonInput ? UI.perpetualLonInput.value : 13.63) || 13.63;
+      if (perpetualGeoPicker) {
+        perpetualGeoPicker.setCoordinates(lat, lon);
+        perpetualGeoPicker.invalidate();
+      }
       updatePerpetualCustomClimatology(lat, lon);
       return;
     }
 
-    if (UI.perpetualCustomCoordsContainer) {
-      UI.perpetualCustomCoordsContainer.style.display = 'none';
-    }
-
     const info = PERPETUAL_BENCHMARKS[lakeKey];
     if (!info) return;
+
+    if (UI.perpetualLatInput) UI.perpetualLatInput.value = info.lat.toFixed(2);
+    if (UI.perpetualLonInput) UI.perpetualLonInput.value = info.lon.toFixed(2);
+    if (UI.perpetualElevationInput) UI.perpetualElevationInput.value = 0;
+
+    if (perpetualGeoPicker) {
+      perpetualGeoPicker.setCoordinates(info.lat, info.lon);
+      perpetualGeoPicker.invalidate();
+    }
+
     if (UI.perpetualName) UI.perpetualName.textContent = info.name;
     if (UI.perpetualRegimePill) {
       UI.perpetualRegimePill.textContent = info.regime;
@@ -1782,6 +1837,11 @@
     if (UI.perpetualLat) UI.perpetualLat.textContent = `${info.lat.toFixed(1)}°N`;
     if (UI.perpetualDesc) UI.perpetualDesc.textContent = info.description;
     if (UI.perpetualTairMean) UI.perpetualTairMean.textContent = `T_air: ${info.meanTair.toFixed(1)} °C`;
+
+    const sourceEl = UI.perpetualLakeCard ? UI.perpetualLakeCard.querySelector('.lake-source-tag span') : null;
+    if (sourceEl) {
+      sourceEl.textContent = 'Source: IGB Berlin Global Reanalysis (2,920 steps, 3h)';
+    }
   }
 
   function updatePerpetualCustomClimatology(lat, lon) {
@@ -1791,8 +1851,15 @@
     if (UI.perpetualClarity) UI.perpetualClarity.textContent = `${state.waterClarity.toFixed(1)} m⁻¹`;
     if (UI.perpetualLat) UI.perpetualLat.textContent = `${lat.toFixed(1)}°N`;
 
+    const sourceEl = UI.perpetualLakeCard ? UI.perpetualLakeCard.querySelector('.lake-source-tag span') : null;
+    if (sourceEl) {
+      sourceEl.textContent = 'Source: Global Harmonic Grid (1,156 stations, 5° resolution)';
+    }
+
+    const elevation = parseFloat(UI.perpetualElevationInput ? UI.perpetualElevationInput.value : 0) || 0;
+
     if (globalHarmonicsCache) {
-      const harm = interpolateHarmonics(lat, lon, globalHarmonicsCache);
+      const harm = interpolateHarmonics(lat, lon, globalHarmonicsCache, elevation);
       if (harm) {
         const t0 = harm[0];
         const a1 = Math.hypot(harm[1], harm[2]);
@@ -1855,7 +1922,7 @@
   }
 
   async function handleRunPerpetual() {
-    const lakeKey = UI.perpetualLakeSelect ? UI.perpetualLakeSelect.value : 'mueggelsee';
+    const lakeKey = UI.perpetualLakeSelect ? UI.perpetualLakeSelect.value : 'custom_coords';
     const isCustom = (lakeKey === 'custom_coords');
 
     if (UI.btnRunPerpetual) UI.btnRunPerpetual.disabled = true;
@@ -1868,6 +1935,7 @@
       if (isCustom) {
         const lat = parseFloat(UI.perpetualLatInput ? UI.perpetualLatInput.value : 52.43) || 52.43;
         const lon = parseFloat(UI.perpetualLonInput ? UI.perpetualLonInput.value : 13.63) || 13.63;
+        const elevation = parseFloat(UI.perpetualElevationInput ? UI.perpetualElevationInput.value : 0) || 0;
         lakeDisplayName = `Custom Location (${lat.toFixed(2)}°, ${lon.toFixed(2)}°)`;
         showPerpetualStatus(`Interpolating global planetary climatology and computing thermal equilibrium for (${lat.toFixed(2)}°, ${lon.toFixed(2)}°)...`, "");
 
@@ -1875,7 +1943,7 @@
         if (!harmonicsData) {
           throw new Error("Planetary harmonic climatology database could not be loaded.");
         }
-        const harmParams = interpolateHarmonics(lat, lon, harmonicsData);
+        const harmParams = interpolateHarmonics(lat, lon, harmonicsData, elevation);
         if (!harmParams) {
           throw new Error("Unable to interpolate harmonic parameters for coordinates.");
         }
@@ -1899,11 +1967,27 @@
         }
 
         const dtSec = rawDataset.timeStepSec || 10800.0;
-        const normalizedSteps = rawDataset.steps.map((s, idx) => {
-          const totalHours = Math.round((idx * dtSec) / 3600.0);
-          const dayOfYear = Math.floor(totalHours / 24.0) + 1;
-          const hourOfDay = totalHours % 24;
-          const timeStr = `Day ${dayOfYear} ${hourOfDay.toString().padStart(2, '0')}:00`;
+        const totalSteps = rawDataset.steps.length;
+        // Rotate 2920 steps so that Hydrological Year begins on Oct 1st (day 274, 273 days from Jan 1 00:00)
+        const oct1Offset = Math.min(totalSteps, 273 * Math.round(86400.0 / dtSec));
+        const rotatedSteps = oct1Offset < totalSteps
+          ? [...rawDataset.steps.slice(oct1Offset), ...rawDataset.steps.slice(0, oct1Offset)]
+          : rawDataset.steps;
+
+        const normalizedSteps = rotatedSteps.map((s, idx) => {
+          const tHours = idx * (dtSec / 3600.0);
+          const tDays = tHours / 24.0;
+          const dayOfYear = ((Math.floor(273.0 + tDays)) % 365) + 1;
+          const hourOfDay = Math.floor(tHours % 24);
+          const virtualYr = (273.0 + tDays) < 365.0 ? 2025 : 2026;
+          const dObj = new Date(Date.UTC(virtualYr, 0, dayOfYear, hourOfDay));
+          const mo = dObj.getUTCMonth();
+          const da = dObj.getUTCDate();
+          const moStr = String(mo + 1).padStart(2, '0');
+          const daStr = String(da).padStart(2, '0');
+          const hrStr = String(hourOfDay).padStart(2, '0');
+          const dateStr = `${virtualYr}-${moStr}-${daStr}`;
+          const timeStr = `${MONTHS[mo]} ${da} ${hrStr}:00 (Day ${dayOfYear})`;
 
           if (Array.isArray(s)) {
             return {
@@ -1916,6 +2000,7 @@
               del_time: dtSec,
               dayOfYear,
               hourOfDay,
+              dateStr,
               timeStr
             };
           } else {
@@ -1930,6 +2015,7 @@
               del_time: s.del_time || dtSec,
               dayOfYear: s.dayOfYear != null ? s.dayOfYear : dayOfYear,
               hourOfDay: s.hourOfDay != null ? s.hourOfDay : hourOfDay,
+              dateStr: s.dateStr || dateStr,
               timeStr: s.timeStr || timeStr
             };
           }
@@ -2608,9 +2694,11 @@
     let tMean = 27.0 - 0.15 * absLat - 0.0035 * (absLat * absLat);
     let tAmp = Math.max(1.5, 1.5 + 0.16 * absLat + 0.0006 * (absLat * absLat));
     let baseWindMean = 2.6;
+    let harmParams = null;
     if (globalHarmonicsCache) {
       const harm = interpolateHarmonics(lat, lon, globalHarmonicsCache);
       if (harm) {
+        harmParams = harm;
         tMean = harm[0];
         tAmp = Math.hypot(harm[1], harm[2]);
         if (harm[8] > 0) baseWindMean = harm[8];
@@ -2654,8 +2742,19 @@
       const dayNum = Math.floor((dateObj - yearStart) / (86400 * 1000)) + 1;
       const dateStr = dateObj.toISOString().split('T')[0];
 
-      const annualAngle = ((2.0 * Math.PI * (dayNum - 105)) / 365.0) + phaseShift;
-      const tSeason = tMean + tAmp * Math.cos(annualAngle);
+      let tSeason;
+      if (harmParams) {
+        const w1 = (2.0 * Math.PI) / 365.0;
+        const w2 = (4.0 * Math.PI) / 365.0;
+        const tDays = dayNum - 1;
+        tSeason = harmParams[0] + (harmParams[1] * Math.cos(w1 * tDays) + harmParams[2] * Math.sin(w1 * tDays))
+                               + (harmParams[3] * Math.cos(w2 * tDays) + harmParams[4] * Math.sin(w2 * tDays));
+      } else {
+        // Fallback zonal profile: summer peak in late July (day 205 in N hemisphere, day 23 in S hemisphere)
+        const peakDay = isNorth ? 205 : 23;
+        const annualAngle = ((2.0 * Math.PI * (dayNum - peakDay)) / 365.0);
+        tSeason = tMean + tAmp * Math.cos(annualAngle);
+      }
 
       // Multi-scale synoptic perturbations (Rossby waves with 5.5-day and 11-day cycles)
       const synopticWave = Math.sin((dIdx * 2.0 * Math.PI) / 5.5) * 3.2 + Math.sin((dIdx * 2.0 * Math.PI) / 11.0) * 1.8;
@@ -3426,7 +3525,7 @@
     ctxHistory.font = '10px ' + getComputedStyle(document.body).getPropertyValue('--font-mono');
 
     // Parse dates/times for history data points
-    let virtualYear = 2024;
+    let virtualYear = 2025;
     let prevDoy = -1;
     let hasAnyRealDate = false;
     const parsedDates = new Array(history.length);
@@ -3646,9 +3745,14 @@
     ctxHistory.beginPath();
     for (let i = 0; i < history.length; i++) {
       const x = xPos(i);
-      const iceH = history[i].hice;
-      if (iceH > 0.001) hasIce = true;
-      const icePx = Math.min(chartH, (iceH / 0.5) * chartH);
+      const iceH = history[i].hice || 0;
+      let icePx = 0;
+      if (iceH > 0.001) {
+        hasIce = true;
+        // Physical ice thickness scaled against lake depth (maxDepth) on right Y-axis.
+        // Maintain minimum visual height of 2.5px so thin ice is clearly noticeable.
+        icePx = Math.min(chartH, Math.max(2.5, (iceH / maxDepth) * chartH));
+      }
       const y = padTop + icePx;
       if (i === 0) ctxHistory.moveTo(x, padTop);
       ctxHistory.lineTo(x, y);
@@ -3656,8 +3760,31 @@
     if (hasIce) {
       ctxHistory.lineTo(padLeft + chartW, padTop);
       ctxHistory.closePath();
-      ctxHistory.fillStyle = 'rgba(103, 232, 249, 0.25)';
+      ctxHistory.fillStyle = 'rgba(103, 232, 249, 0.35)';
       ctxHistory.fill();
+
+      // Draw crisp stroke at ice-water boundary
+      ctxHistory.beginPath();
+      let started = false;
+      for (let i = 0; i < history.length; i++) {
+        const iceH = history[i].hice || 0;
+        if (iceH > 0.001) {
+          const x = xPos(i);
+          const icePx = Math.min(chartH, Math.max(2.5, (iceH / maxDepth) * chartH));
+          const y = padTop + icePx;
+          if (!started) {
+            ctxHistory.moveTo(x, y);
+            started = true;
+          } else {
+            ctxHistory.lineTo(x, y);
+          }
+        } else {
+          started = false;
+        }
+      }
+      ctxHistory.strokeStyle = 'rgba(103, 232, 249, 0.85)';
+      ctxHistory.lineWidth = 1.2;
+      ctxHistory.stroke();
     }
     ctxHistory.restore();
 
@@ -3722,6 +3849,20 @@
         ctxHistory.setLineDash([]);
         ctxHistory.stroke();
       }
+      ctxHistory.restore();
+    }
+
+    // Hover crosshair needle
+    if (state.hoverHistoryIndex != null && state.hoverHistoryIndex >= 0 && state.hoverHistoryIndex < history.length) {
+      const hX = xPos(state.hoverHistoryIndex);
+      ctxHistory.save();
+      ctxHistory.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+      ctxHistory.lineWidth = 1;
+      ctxHistory.setLineDash([2, 2]);
+      ctxHistory.beginPath();
+      ctxHistory.moveTo(hX, padTop);
+      ctxHistory.lineTo(hX, padTop + chartH);
+      ctxHistory.stroke();
       ctxHistory.restore();
     }
 
@@ -3910,10 +4051,13 @@
       state.snowRate = 0.0;
       engine.resetState('spring');
     } else if (presetKey === 'annual') {
-      state.baseAirTemp = 10.0;
-      state.baseSolar = 400.0;
+      state.baseAirTemp = 14.5;
+      state.baseSolar = 350.0;
       state.baseWind = 3.5;
-      engine.resetState('spring');
+      state.snowRate = 0.0;
+      engine.resetState('autumn');
+      engine.dayOfYear = 274; // Hydrological year starts Oct 1st
+      engine.hourOfDay = 12;
     }
 
     UI.sliderAirTemp.value = state.baseAirTemp;
@@ -4404,6 +4548,7 @@
     }
 
     function handlePerpetualCoordsChange() {
+      if (UI.perpetualLakeSelect) UI.perpetualLakeSelect.value = 'custom_coords';
       const lat = parseFloat(UI.perpetualLatInput ? UI.perpetualLatInput.value : 52.43) || 52.43;
       const lon = parseFloat(UI.perpetualLonInput ? UI.perpetualLonInput.value : 13.63) || 13.63;
       if (perpetualGeoPicker) {
@@ -4417,6 +4562,9 @@
     }
     if (UI.perpetualLonInput) {
       UI.perpetualLonInput.addEventListener('change', handlePerpetualCoordsChange);
+    }
+    if (UI.perpetualElevationInput) {
+      UI.perpetualElevationInput.addEventListener('input', handlePerpetualCoordsChange);
     }
 
     // Curated Lake select change
@@ -4700,37 +4848,63 @@
       if (state.history.length > 1 && mouseX >= padLeft && mouseX <= padLeft + chartW) {
         const ratio = (mouseX - padLeft) / chartW;
         const idx = Math.min(state.history.length - 1, Math.max(0, Math.round(ratio * (state.history.length - 1))));
+        state.hoverHistoryIndex = idx;
         const h = state.history[idx];
 
-        UI.historyTooltip.style.display = 'block';
-        UI.historyTooltip.style.left = `${Math.min(rect.width - 160, mouseX + 10)}px`;
         let headerTime = h.timeStr || `Day ${h.dayOfYear}, ${h.hourOfDay}:00`;
-        if (h.dateStr && /^\d{4}-\d{3}$/.test(h.dateStr)) {
+        if (h.dateStr && /^\d{4}-\d{2}-\d{2}$/.test(h.dateStr)) {
+          const parts = h.dateStr.split('-');
+          const y = parseInt(parts[0], 10);
+          const m = parseInt(parts[1], 10) - 1;
+          const d = parseInt(parts[2], 10);
+          const hr = h.hourOfDay != null ? String(h.hourOfDay).padStart(2, '0') : '00';
+          headerTime = `${MONTHS[m]} ${d}, ${y} ${hr}:00 (Day ${h.dayOfYear})`;
+        } else if (h.dateStr && /^\d{4}-\d{3}$/.test(h.dateStr)) {
           const parts = h.dateStr.split('-');
           const y = parseInt(parts[0], 10);
           const doy = parseInt(parts[1], 10);
           const dt = new Date(Date.UTC(y, 0, doy));
           const mo = MONTHS[dt.getUTCMonth()];
-          headerTime = `${y}-${mo}-${String(dt.getUTCDate()).padStart(2, '0')} (${h.timeStr || `Day ${doy}`})`;
+          headerTime = `${mo} ${dt.getUTCDate()}, ${y} (Day ${doy})`;
         } else if (!h.timeStr && h.dayOfYear != null) {
           headerTime = getSimulatedDateString(h.dayOfYear, h.hourOfDay != null ? h.hourOfDay : 0);
         }
 
+        const tooltipW = 200;
+        const tooltipH = 160;
+        const left = (mouseX + 15 + tooltipW > rect.width) ? (mouseX - tooltipW - 12) : (mouseX + 15);
+        const top = Math.max(8, Math.min(rect.height - tooltipH - 8, mouseY - 25));
+
+        UI.historyTooltip.style.display = 'block';
+        UI.historyTooltip.style.left = `${left}px`;
+        UI.historyTooltip.style.top = `${top}px`;
+
         UI.historyTooltip.innerHTML = `
-          <div style="font-weight:600; color:#38bdf8;">${headerTime}</div>
-          <div>T_sfc: <b style="color:#f43f5e;">${h.Tsfc.toFixed(1)}°C</b></div>
-          <div>T_wML: <b style="color:#fbbf24;">${h.TwML.toFixed(1)}°C</b></div>
-          <div>T_bot: <b style="color:#38bdf8;">${h.Tbot.toFixed(1)}°C</b></div>
-          <div>h_ML: <b style="color:#c084fc;">${h.hML.toFixed(1)} m</b></div>
-          ${h.hice > 0.0005 ? `<div>Ice: <b style="color:#67e8f9;">${(h.hice*100).toFixed(1)} cm</b></div>` : ''}
+          <div style="font-weight:600; color:#38bdf8; margin-bottom:3px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:2px;">${headerTime}</div>
+          <div>T_sfc: <b style="color:#f43f5e;">${h.Tsfc.toFixed(2)} °C</b></div>
+          <div>T_wML: <b style="color:#fbbf24;">${h.TwML.toFixed(2)} °C</b></div>
+          <div>T_bot: <b style="color:#38bdf8;">${h.Tbot.toFixed(2)} °C</b></div>
+          ${h.Tair != null ? `<div>T_air: <b style="color:#9ca3af;">${h.Tair.toFixed(1)} °C</b></div>` : ''}
+          <div>h_ML: <b style="color:#c084fc;">${h.hML.toFixed(2)} m</b></div>
+          ${h.hice > 0.0005 ? `<div>Ice: <b style="color:#67e8f9;">${(h.hice * 100).toFixed(1)} cm</b>${h.Tice != null ? ` (${h.Tice.toFixed(1)}°C)` : ''}</div>` : ''}
+          ${h.hsnow > 0.0005 ? `<div>Snow: <b style="color:#e2e8f0;">${(h.hsnow * 100).toFixed(1)} cm</b></div>` : ''}
         `;
+        renderHistoryChart();
       } else {
+        if (state.hoverHistoryIndex !== null) {
+          state.hoverHistoryIndex = null;
+          renderHistoryChart();
+        }
         UI.historyTooltip.style.display = 'none';
       }
     });
 
     UI.historyCanvas.addEventListener('mouseleave', () => {
       UI.historyTooltip.style.display = 'none';
+      if (state.hoverHistoryIndex !== null) {
+        state.hoverHistoryIndex = null;
+        renderHistoryChart();
+      }
     });
 
     window.addEventListener('resize', () => {
@@ -4746,7 +4920,7 @@
 
       setupEventListeners();
       updateCuratedLakeCard('heiligensee');
-      updatePerpetualLakeCard('mueggelsee');
+      updatePerpetualLakeCard('custom_coords');
       updateForcingModeContext('api');
 
       // Hydrological year period label setup
@@ -4836,6 +5010,7 @@
           initialLat: parseFloat(UI.perpetualLatInput?.value) || 52.43,
           initialLon: parseFloat(UI.perpetualLonInput?.value) || 13.63,
           onLocationChange: (lat, lon) => {
+            if (UI.perpetualLakeSelect) UI.perpetualLakeSelect.value = 'custom_coords';
             if (UI.perpetualLatInput) UI.perpetualLatInput.value = lat.toFixed(2);
             if (UI.perpetualLonInput) UI.perpetualLonInput.value = lon.toFixed(2);
             updatePerpetualCustomClimatology(lat, lon);

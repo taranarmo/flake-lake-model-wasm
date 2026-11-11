@@ -17,6 +17,10 @@ import numpy as np
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
 CGI_DIR = os.path.join(ROOT_DIR, "igb-flake-setup/000flake/flake/cgi-bin")
+if not os.path.exists(CGI_DIR):
+    alt_cgi = "/home/taranarmo/dev/flake-lake-model-wasm/igb-flake-setup/000flake/flake/cgi-bin"
+    if os.path.exists(alt_cgi):
+        CGI_DIR = alt_cgi
 OUTPUT_PATHS = [
     os.path.join(ROOT_DIR, "model/data/climatology_harmonics.json"),
     os.path.join(ROOT_DIR, "data/climatology_harmonics.json")
@@ -48,9 +52,9 @@ def is_land(lat, lon):
     return False
 
 def get_grid_filename(lon, lat):
-    l_idx = (lon + 360) if lon < 0 else lon
+    l_idx = int(round(lon + 360)) if lon < 0 else int(round(lon))
     l_idx += 1
-    la_idx = lat + 91
+    la_idx = int(round(lat + 91))
     return f"{l_idx:04d}{la_idx:04d}"
 
 def extract_and_fit_point(coord):
@@ -77,8 +81,14 @@ def extract_and_fit_point(coord):
     if len(lines) < 2920:
         return None
 
-    # Use first 2920 timesteps (365 days * 8 steps/day)
-    data = np.array(lines[:2920])
+    # Use 2920 timesteps corresponding to 2006 calendar year (Jan 1 - Dec 31)
+    # NOAA GDAS1 getmeteo files start on Nov 1 2005; step 488 is Jan 1 2006 00:00 (488 * 3h = 1464h = 61 days)
+    if len(lines) >= 3408:
+        perpetual_lines = lines[488:3408]
+    else:
+        perpetual_lines = lines[:2920]
+
+    data = np.array(perpetual_lines)
     solar = np.maximum(0.0, data[:, 0])
     tair = data[:, 1]
     ea = np.maximum(0.1, data[:, 2])

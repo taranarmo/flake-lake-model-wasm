@@ -782,9 +782,12 @@ class FLakeEngine {
 
         if (cycle === maxIterations || converged) {
           const totalHours = Math.round((i * delTime) / 3600.0);
-          const dayOfYear = Math.floor(totalHours / 24.0) + 1;
-          const hourOfDay = totalHours % 24;
-          const timeStr = `Day ${dayOfYear} ${hourOfDay.toString().padStart(2, '0')}:00`;
+          const defaultDay = Math.floor(totalHours / 24.0) + 1;
+          const defaultHour = totalHours % 24;
+          const dayOfYear = f.dayOfYear != null ? f.dayOfYear : defaultDay;
+          const hourOfDay = f.hourOfDay != null ? f.hourOfDay : defaultHour;
+          const timeStr = f.timeStr || `Day ${dayOfYear} ${hourOfDay.toString().padStart(2, '0')}:00`;
+          const dateStr = f.dateStr || timeStr;
 
           cycleHistory.push({
             index: i,
@@ -793,7 +796,7 @@ class FLakeEngine {
             dayOfYear: dayOfYear,
             hourOfDay: hourOfDay,
             timeStr: timeStr,
-            dateStr: timeStr,
+            dateStr: dateStr,
             Tsfc: res.Tsfc,
             TwML: res.TwML,
             Tbot: res.Tbot,
@@ -835,9 +838,12 @@ class FLakeEngine {
             const f = normalizedSeries[i];
             const res = this.step(f);
             const totalHours = Math.round((i * delTime) / 3600.0);
-            const dayOfYear = Math.floor(totalHours / 24.0) + 1;
-            const hourOfDay = totalHours % 24;
-            const timeStr = `Day ${dayOfYear} ${hourOfDay.toString().padStart(2, '0')}:00`;
+            const defaultDay = Math.floor(totalHours / 24.0) + 1;
+            const defaultHour = totalHours % 24;
+            const dayOfYear = f.dayOfYear != null ? f.dayOfYear : defaultDay;
+            const hourOfDay = f.hourOfDay != null ? f.hourOfDay : defaultHour;
+            const timeStr = f.timeStr || `Day ${dayOfYear} ${hourOfDay.toString().padStart(2, '0')}:00`;
+            const dateStr = f.dateStr || timeStr;
 
             cycleHistory.push({
               index: i,
@@ -846,7 +852,7 @@ class FLakeEngine {
               dayOfYear: dayOfYear,
               hourOfDay: hourOfDay,
               timeStr: timeStr,
-              dateStr: timeStr,
+              dateStr: dateStr,
               Tsfc: res.Tsfc,
               TwML: res.TwML,
               Tbot: res.Tbot,
@@ -876,7 +882,7 @@ class FLakeEngine {
     // Limnological Analysis of the Converged Equilibrium Year
     let minTsfc = 100, maxTsfc = -100, sumTsfc = 0;
     let minTbot = 100, maxTbot = -100, sumTbot = 0;
-    let maxHice = 0, iceSteps = 0;
+    let maxHice = 0, iceSteps = 0, maxHsnow = 0;
     let stratSteps = 0, inverseStratSteps = 0, mixedSteps = 0;
 
     for (let i = 0; i < finalHistory.length; i++) {
@@ -892,6 +898,7 @@ class FLakeEngine {
         iceSteps++;
         if (h.hice > maxHice) maxHice = h.hice;
       }
+      if (h.hsnow > maxHsnow) maxHsnow = h.hsnow;
 
       const deltaT = h.Tsfc - h.Tbot;
       if (deltaT >= 1.0) {
@@ -958,6 +965,7 @@ class FLakeEngine {
         maxTbot: parseFloat(maxTbot.toFixed(2)),
         meanTbot: parseFloat(meanTbot.toFixed(2)),
         maxHiceM: parseFloat(maxHice.toFixed(3)),
+        maxHsnowM: parseFloat(maxHsnow.toFixed(3)),
         iceDays,
         stratDays
       },
