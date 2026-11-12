@@ -317,6 +317,7 @@ class FLakeEngine {
     const delTime = forcing.del_time || this.timeStepSec;
 
     let Q_lw = forcing.Q_lw;
+    const P_a = forcing.P_a != null ? forcing.P_a : (forcing.pressure != null ? forcing.pressure : 101325.0);
     let q_air = forcing.q_air;
     const exp = this.instance.exports;
 
@@ -325,15 +326,15 @@ class FLakeEngine {
         const eaPa = (forcing.ea != null ? forcing.ea : forcing.e_a) * 100.0;
         if (exp.__module_sfcflx_sfcflx_spechum) {
           mv.setFloat64(p.sp_ea, eaPa, true);
-          mv.setFloat64(p.sp_Pa, 101325.0, true);
+          mv.setFloat64(p.sp_Pa, P_a, true);
           q_air = exp.__module_sfcflx_sfcflx_spechum(p.sp_ea, p.sp_Pa);
         } else {
-          q_air = (0.622 * eaPa) / (101325.0 - 0.378 * eaPa);
+          q_air = (0.622 * eaPa) / (P_a - 0.378 * eaPa);
         }
       } else {
         const e_sat = 611.2 * Math.exp((17.67 * Tair) / (Tair + 243.5));
         const rh = forcing.rh != null ? forcing.rh : 0.70;
-        q_air = (0.622 * (rh * e_sat)) / (101325.0 - 0.378 * (rh * e_sat));
+        q_air = (0.622 * (rh * e_sat)) / (P_a - 0.378 * (rh * e_sat));
       }
     }
 
@@ -348,12 +349,16 @@ class FLakeEngine {
         Q_lw = -lw_atm;
       } else {
         const Tair_K = Tair + K;
-        const eps_eff = 0.76;
+        const eaPa = (forcing.ea != null ? forcing.ea : (forcing.e_a != null ? forcing.e_a : 10.0)) * 100.0;
+        const eps_clear = Math.min(0.85, 0.61 + 0.005 * Math.sqrt(Math.min(eaPa, 2000)));
+        const cl = forcing.cl != null ? forcing.cl : 0.5;
+        const f_cloud = 1.0 + 0.22 * (cl * cl);
         const sigma = 5.670374e-8;
-        Q_lw = eps_eff * sigma * Math.pow(Tair_K, 4);
+        Q_lw = eps_clear * f_cloud * sigma * Math.pow(Tair_K, 4);
       }
     }
 
+    mv.setFloat64(p.P_a_in, P_a, true);
     mv.setFloat64(p.T_a_in, Tair + K, true);
     mv.setFloat64(p.I_atm_in, solar, true);
     mv.setFloat64(p.Q_atm_lw_in, Q_lw, true);
@@ -415,10 +420,13 @@ class FLakeEngine {
       console.error("FLake timestep returned NaN or Inf!");
     }
 
-    this.simulatedHours++;
-    this.hourOfDay = (this.hourOfDay + 1) % 24;
-    if (this.hourOfDay === 0) {
-      this.dayOfYear = (this.dayOfYear % 365) + 1;
+    const stepHours = (delTime || 3600.0) / 3600.0;
+    this.simulatedHours += stepHours;
+    const totalHours = this.hourOfDay + stepHours;
+    const daysAdvanced = Math.floor(totalHours / 24);
+    this.hourOfDay = totalHours % 24;
+    if (daysAdvanced > 0) {
+      this.dayOfYear = ((this.dayOfYear - 1 + daysAdvanced) % 365) + 1;
     }
 
     return this.state;
@@ -444,6 +452,8 @@ class FLakeEngine {
     const backupHours = this.simulatedHours;
     const backupDay = this.dayOfYear;
     const backupHourOfDay = this.hourOfDay;
+    const backupHB1 = mv.getFloat64(p.H_B1_in, true);
+    const backupTB1 = mv.getFloat64(p.T_B1_in, true);
 
     // Apply direct calculation lake parameters
     const depth = lakeParams.depth != null ? lakeParams.depth : this.lakeDepth;
@@ -490,6 +500,10 @@ class FLakeEngine {
       stepHistory.push({ ...currentState, step: s + 1 });
     }
 
+    if (!currentState) {
+      currentState = { ...init };
+    }
+
     const elapsedMs = performance.now() - tStart;
     const finalProfile = this.getVerticalProfile(60);
 
@@ -522,8 +536,8 @@ class FLakeEngine {
     mv.setFloat64(p.T_ice_in, backupState.Tice + K, true);
     mv.setFloat64(p.h_snow_in, backupState.hsnow, true);
     mv.setFloat64(p.T_snow_in, backupState.Tsnow + K, true);
-    mv.setFloat64(p.H_B1_in, 1.0, true);
-    mv.setFloat64(p.T_B1_in, backupState.Tbot + K, true);
+    mv.setFloat64(p.H_B1_in, backupHB1, true);
+    mv.setFloat64(p.T_B1_in, backupTB1, true);
 
     return {
       before: init,
@@ -615,6 +629,10 @@ class FLakeEngine {
     const tStart = performance.now();
     if (lakeParams) {
       this.setLakeParameters(lakeParams);
+      if (lakeParams.lat != null) {
+        const coriolis = 2.0 * 7.292115e-5 * Math.sin((lakeParams.lat * Math.PI) / 180.0);
+        this.memView.setFloat64(this.ptrs.par_Coriolis, coriolis, true);
+      }
     }
 
     if (initialState) {
@@ -739,6 +757,7 @@ class FLakeEngine {
     const mv = this.memView;
     const p = this.ptrs;
 
+    const backupCoriolis = mv.getFloat64(p.par_Coriolis, true);
     const coriolis = 2.0 * 7.292115e-5 * Math.sin((lat * Math.PI) / 180.0);
     mv.setFloat64(p.par_Coriolis, coriolis, true);
     mv.setFloat64(p.del_time, delTime, true);
@@ -780,39 +799,37 @@ class FLakeEngine {
         const f = normalizedSeries[i];
         const res = this.step(f);
 
-        if (cycle === maxIterations || converged) {
-          const totalHours = Math.round((i * delTime) / 3600.0);
-          const defaultDay = Math.floor(totalHours / 24.0) + 1;
-          const defaultHour = totalHours % 24;
-          const dayOfYear = f.dayOfYear != null ? f.dayOfYear : defaultDay;
-          const hourOfDay = f.hourOfDay != null ? f.hourOfDay : defaultHour;
-          const timeStr = f.timeStr || `Day ${dayOfYear} ${hourOfDay.toString().padStart(2, '0')}:00`;
-          const dateStr = f.dateStr || timeStr;
+        const totalHours = Math.round((i * delTime) / 3600.0);
+        const defaultDay = Math.floor(totalHours / 24.0) + 1;
+        const defaultHour = totalHours % 24;
+        const dayOfYear = f.dayOfYear != null ? f.dayOfYear : defaultDay;
+        const hourOfDay = f.hourOfDay != null ? f.hourOfDay : defaultHour;
+        const timeStr = f.timeStr || `Day ${dayOfYear} ${hourOfDay.toString().padStart(2, '0')}:00`;
+        const dateStr = f.dateStr || timeStr;
 
-          cycleHistory.push({
-            index: i,
-            step: i,
-            hour: totalHours,
-            dayOfYear: dayOfYear,
-            hourOfDay: hourOfDay,
-            timeStr: timeStr,
-            dateStr: dateStr,
-            Tsfc: res.Tsfc,
-            TwML: res.TwML,
-            Tbot: res.Tbot,
-            Tmnw: res.Tmnw,
-            hML: res.hML,
-            CT: res.CT,
-            hice: res.hice,
-            Tice: res.Tice,
-            hsnow: res.hsnow || 0,
-            Tsnow: res.Tsnow || 0,
-            Tair: f.T_air,
-            solar: f.solar,
-            wind: f.wind,
-            Q_lw: res.Q_lw
-          });
-        }
+        cycleHistory.push({
+          index: i,
+          step: i,
+          hour: totalHours,
+          dayOfYear: dayOfYear,
+          hourOfDay: hourOfDay,
+          timeStr: timeStr,
+          dateStr: dateStr,
+          Tsfc: res.Tsfc,
+          TwML: res.TwML,
+          Tbot: res.Tbot,
+          Tmnw: res.Tmnw,
+          hML: res.hML,
+          CT: res.CT,
+          hice: res.hice,
+          Tice: res.Tice,
+          hsnow: res.hsnow || 0,
+          Tsnow: res.Tsnow || 0,
+          Tair: f.T_air,
+          solar: f.solar,
+          wind: f.wind,
+          Q_lw: f.Q_lw != null ? f.Q_lw : (res.Q_lw || 0)
+        });
       }
 
       cyclesDone = cycle;
@@ -833,43 +850,6 @@ class FLakeEngine {
 
       if (deltaMax <= tol) {
         converged = true;
-        if (cycleHistory.length === 0) {
-          for (let i = 0; i < normalizedSeries.length; i++) {
-            const f = normalizedSeries[i];
-            const res = this.step(f);
-            const totalHours = Math.round((i * delTime) / 3600.0);
-            const defaultDay = Math.floor(totalHours / 24.0) + 1;
-            const defaultHour = totalHours % 24;
-            const dayOfYear = f.dayOfYear != null ? f.dayOfYear : defaultDay;
-            const hourOfDay = f.hourOfDay != null ? f.hourOfDay : defaultHour;
-            const timeStr = f.timeStr || `Day ${dayOfYear} ${hourOfDay.toString().padStart(2, '0')}:00`;
-            const dateStr = f.dateStr || timeStr;
-
-            cycleHistory.push({
-              index: i,
-              step: i,
-              hour: totalHours,
-              dayOfYear: dayOfYear,
-              hourOfDay: hourOfDay,
-              timeStr: timeStr,
-              dateStr: dateStr,
-              Tsfc: res.Tsfc,
-              TwML: res.TwML,
-              Tbot: res.Tbot,
-              Tmnw: res.Tmnw,
-              hML: res.hML,
-              CT: res.CT,
-              hice: res.hice,
-              Tice: res.Tice,
-              hsnow: res.hsnow || 0,
-              Tsnow: res.Tsnow || 0,
-              Tair: f.T_air,
-              solar: f.solar,
-              wind: f.wind,
-              Q_lw: res.Q_lw
-            });
-          }
-        }
         finalHistory = cycleHistory;
         break;
       }
@@ -878,6 +858,9 @@ class FLakeEngine {
         finalHistory = cycleHistory;
       }
     }
+
+    // Restore Coriolis parameter
+    mv.setFloat64(p.par_Coriolis, backupCoriolis, true);
 
     // Limnological Analysis of the Converged Equilibrium Year
     let minTsfc = 100, maxTsfc = -100, sumTsfc = 0;
