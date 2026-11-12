@@ -61,24 +61,104 @@
     }[c]));
   }
 
-  function updateClarityUI(clarity) {
-    state.waterClarity = clarity;
-    if (!UI.selectClarity || clarity == null) return;
-    const valStr = clarity.toString();
-    let found = false;
-    for (let i = 0; i < UI.selectClarity.options.length; i++) {
-      if (Math.abs(parseFloat(UI.selectClarity.options[i].value) - clarity) < 0.01) {
-        UI.selectClarity.selectedIndex = i;
-        found = true;
-        break;
-      }
+  function getClarityInfo(kappa) {
+    const k = Math.max(0.01, kappa);
+    const secchi = 1.7 / k;
+    const euphotic = 4.6 / k;
+    let badge = '';
+    let badgeClass = '';
+    let desc = '';
+    let examples = '';
+
+    if (k <= 0.25) {
+      badge = 'Ultra-Oligotrophic';
+      badgeClass = 'clarity-ultra-clear';
+      desc = 'Extremely clear waters with minimal nutrients/plankton. Shortwave solar radiation penetrates deeply into the hypolimnion, creating deep summer thermoclines.';
+      examples = 'Lake Superior, Lake Tahoe, Crater Lake, Lake Baikal';
+    } else if (k <= 0.50) {
+      badge = 'Oligotrophic (Clear)';
+      badgeClass = 'clarity-oligotrophic';
+      desc = 'High clarity and low productivity. Solar heating is distributed across several meters, delaying rapid surface warming.';
+      examples = 'Lake Stechlin, Lake Geneva, Lake Annecy';
+    } else if (k <= 0.90) {
+      badge = 'Mesotrophic (Moderate)';
+      badgeClass = 'clarity-mesotrophic';
+      desc = 'Moderate clarity and balanced nutrient levels; standard temperate lake conditions with intermediate light attenuation.';
+      examples = 'Lake Müggelsee, Lake Constance / Bodensee';
+    } else if (k <= 1.60) {
+      badge = 'Eutrophic (Productive)';
+      badgeClass = 'clarity-eutrophic';
+      desc = 'Nutrient-rich with elevated phytoplankton biomass. High light extinction concentrates heat in the upper 1–2 meters, promoting warm shallow epilimnia.';
+      examples = 'Lake Heiligensee, Lake Balaton';
+    } else {
+      badge = 'Dystrophic / Turbid';
+      badgeClass = 'clarity-turbid';
+      desc = 'Severe light attenuation from high suspended sediments or humic dissolved organic matter (brown water). Very shallow mixed layers and steep thermal gradients.';
+      examples = 'Lake Victoria (inshore), peatland humic lakes';
     }
-    if (!found) {
-      const opt = document.createElement('option');
-      opt.value = valStr;
-      opt.textContent = `Custom (κ = ${clarity.toFixed(2)} m⁻¹)`;
-      UI.selectClarity.appendChild(opt);
-      UI.selectClarity.value = valStr;
+
+    const secchiStr = secchi >= 10 ? secchi.toFixed(0) : (secchi >= 1 ? secchi.toFixed(1) : secchi.toFixed(2));
+    const euphoticStr = euphotic >= 10 ? euphotic.toFixed(0) : (euphotic >= 1 ? euphotic.toFixed(1) : euphotic.toFixed(2));
+
+    return {
+      secchi: secchiStr,
+      euphotic: euphoticStr,
+      badge,
+      badgeClass,
+      desc,
+      examples
+    };
+  }
+
+  function updateClarityUI(clarity, updateInput = true, updateSlider = true) {
+    if (clarity == null || isNaN(clarity)) return;
+    const c = Math.max(0.05, Math.min(10.0, clarity));
+    state.waterClarity = c;
+
+    if (updateInput && UI.inputClarity) {
+      UI.inputClarity.value = c.toFixed(2);
+    }
+    if (UI.valClarity) {
+      UI.valClarity.textContent = `${c.toFixed(2)} m⁻¹`;
+    }
+    if (updateSlider && UI.sliderClarity) {
+      if (c > 4.0) {
+        UI.sliderClarity.max = Math.ceil(c * 1.25);
+      } else {
+        UI.sliderClarity.max = 4.0;
+      }
+      UI.sliderClarity.value = c;
+    }
+
+    const info = getClarityInfo(c);
+    if (UI.valSecchi) {
+      UI.valSecchi.textContent = `~${info.secchi} m`;
+    }
+    if (UI.clarityRegimeBadge) {
+      UI.clarityRegimeBadge.textContent = info.badge;
+      UI.clarityRegimeBadge.className = `clarity-badge ${info.badgeClass}`;
+    }
+    if (UI.clarityDescText) {
+      UI.clarityDescText.innerHTML = `${info.desc}<span style="display: block; margin-top: 2px; color: var(--text-main); font-weight: 500;">Examples: ${info.examples}</span>`;
+    }
+
+    if (UI.selectClarity) {
+      const valStr = c.toString();
+      let found = false;
+      for (let i = 0; i < UI.selectClarity.options.length; i++) {
+        if (Math.abs(parseFloat(UI.selectClarity.options[i].value) - c) < 0.01) {
+          UI.selectClarity.selectedIndex = i;
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        const opt = document.createElement('option');
+        opt.value = valStr;
+        opt.textContent = `Custom (κ = ${c.toFixed(2)} m⁻¹)`;
+        UI.selectClarity.appendChild(opt);
+        UI.selectClarity.value = valStr;
+      }
     }
   }
   const CURATED_BENCHMARKS = {
@@ -1201,6 +1281,12 @@
     sliderDepth: document.getElementById('slider-depth'),
     valDepth: document.getElementById('val-depth'),
     inputDepth: document.getElementById('input-depth'),
+    sliderClarity: document.getElementById('slider-clarity'),
+    valClarity: document.getElementById('val-clarity'),
+    inputClarity: document.getElementById('input-clarity'),
+    valSecchi: document.getElementById('val-secchi'),
+    clarityRegimeBadge: document.getElementById('clarity-regime-badge'),
+    clarityDescText: document.getElementById('clarity-desc-text'),
     selectClarity: document.getElementById('select-clarity'),
 
     // Telemetry
@@ -4887,11 +4973,46 @@
       });
     }
 
-    UI.selectClarity.addEventListener('change', (e) => {
-      const extin = parseFloat(e.target.value);
-      state.waterClarity = extin;
-      engine.setLakeParameters({ extinWater: extin });
-    });
+    if (UI.sliderClarity) {
+      UI.sliderClarity.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        if (!isNaN(val)) {
+          updateClarityUI(val, true, false);
+          engine.setLakeParameters({ extinWater: val });
+          renderAll();
+        }
+      });
+    }
+
+    if (UI.inputClarity) {
+      UI.inputClarity.addEventListener('change', (e) => {
+        const val = parseFloat(e.target.value);
+        if (!isNaN(val) && val >= 0.05 && val <= 10.0) {
+          updateClarityUI(val, true, true);
+          engine.setLakeParameters({ extinWater: val });
+          renderAll();
+        } else {
+          updateClarityUI(state.waterClarity, true, true);
+        }
+      });
+      UI.inputClarity.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        if (!isNaN(val) && val >= 0.05 && val <= 10.0) {
+          updateClarityUI(val, false, true);
+          engine.setLakeParameters({ extinWater: val });
+          renderAll();
+        }
+      });
+    }
+
+    if (UI.selectClarity) {
+      UI.selectClarity.addEventListener('change', (e) => {
+        const extin = parseFloat(e.target.value);
+        updateClarityUI(extin, true, true);
+        engine.setLakeParameters({ extinWater: extin });
+        renderAll();
+      });
+    }
 
     // Tooltips
     UI.profileCanvas.addEventListener('mousemove', (e) => {
@@ -5037,6 +5158,7 @@
         updateLakeDepth(info.depth);
       } else {
         updateLakeDepth(state.lakeDepth);
+        updateClarityUI(state.waterClarity);
       }
 
       // Sync slider inputs to default state values

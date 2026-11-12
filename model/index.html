@@ -627,19 +627,42 @@
             <!-- Water Clarity / Optical Extinction -->
             <div class="control-group">
               <div class="control-label-row">
-                <span class="control-label">Water Clarity (Light Extinction κ)</span>
+                <span class="control-label">Water Clarity (Extinction &kappa;)</span>
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <input type="number" id="input-clarity" class="api-input" min="0.05" max="10.0" step="0.05" value="1.00" style="width: 78px; padding: 2px 6px; font-size: 0.82rem; text-align: right;" title="Enter custom extinction coefficient κ in m⁻¹">
+                  <span id="val-clarity" class="control-val-display" style="display: none;">1.00 m⁻¹</span>
+                  <span style="font-size: 0.78rem; color: var(--text-muted); font-family: var(--font-mono);">m⁻¹</span>
+                </div>
               </div>
-              <select id="select-clarity" class="speed-select" style="width: 100%;">
-                <option value="0.2">Ultra-Oligotrophic (Lake Superior, κ = 0.2 m⁻¹)</option>
-                <option value="0.3">Oligotrophic (Lake Stechlin, κ = 0.3 m⁻¹)</option>
-                <option value="0.5">High Clarity (Clear Lake, κ = 0.5 m⁻¹)</option>
-                <option value="0.7">Mesotrophic (Lake Müggelsee, κ = 0.7 m⁻¹)</option>
-                <option value="1.0" selected>Moderate Clarity (κ = 1.0 m⁻¹)</option>
-                <option value="1.2">Eutrophic (Lake Heiligensee, κ = 1.2 m⁻¹)</option>
-                <option value="1.5">Eutrophic Turbid (κ = 1.5 m⁻¹)</option>
-                <option value="1.8">Hypereutrophic (Lake Victoria, κ = 1.8 m⁻¹)</option>
-                <option value="3.0">Turbid / Humic (High Absorption, κ = 3.0 m⁻¹)</option>
-              </select>
+              <input type="range" id="slider-clarity" class="slider-input" min="0.1" max="4.0" step="0.05" value="1.0" title="Slide to adjust water extinction coefficient κ">
+              
+              <!-- Dynamic Limnological Guidance Card -->
+              <div class="clarity-status-card" id="clarity-status-box" style="margin-top: 0.45rem; padding: 0.45rem 0.6rem; background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 4px; display: flex; flex-direction: column; gap: 0.25rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span id="clarity-regime-badge" class="clarity-badge clarity-mesotrophic">Mesotrophic (Moderate)</span>
+                  <span style="font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono);">Secchi &asymp; <b id="val-secchi" style="color: var(--accent-blue);">~1.7 m</b></span>
+                </div>
+                <div id="clarity-desc-text" style="font-size: 0.73rem; color: var(--text-muted); line-height: 1.35;">
+                  Intermediate productivity and moderate transparency; standard temperate lake conditions.
+                  <span style="display: block; margin-top: 2px; color: var(--text-main); font-weight: 500;">Examples: Lake Müggelsee, Lake Constance / Bodensee</span>
+                </div>
+              </div>
+
+              <!-- Collapsible Educational Info Box -->
+              <details class="clarity-info-details" style="margin-top: 0.45rem; font-size: 0.73rem; color: var(--text-muted);">
+                <summary style="cursor: pointer; color: var(--accent-blue); font-weight: 500; user-select: none;">
+                  <span>What is Light Extinction (&kappa;)?</span>
+                </summary>
+                <div style="margin-top: 0.35rem; padding: 0.45rem 0.55rem; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 4px; line-height: 1.45;">
+                  <p style="margin: 0 0 0.35rem 0;">Governs shortwave solar radiation absorption via the Beer-Lambert law: <code>I(z) = I₀ &middot; exp(-&kappa;z)</code>.</p>
+                  <ul style="margin: 0; padding-left: 1.1rem; list-style-type: disc;">
+                    <li><b>Low &kappa; (&le; 0.3 m⁻¹):</b> Oligotrophic / deep clear lakes (e.g., Lake Superior &asymp; 0.2, Stechlin &asymp; 0.3). Solar heat penetrates deeply, delaying surface warming and deepening the thermocline.</li>
+                    <li><b>Moderate &kappa; (0.4 &ndash; 0.9 m⁻¹):</b> Mesotrophic lakes (e.g., Müggelsee &asymp; 0.7, Geneva &asymp; 0.4). Balanced heat trapping.</li>
+                    <li><b>High &kappa; (&ge; 1.0 m⁻¹):</b> Eutrophic / turbid waters (e.g., Heiligensee &asymp; 1.2, Balaton &asymp; 1.8). Heat is concentrated in top centimeters, creating warm shallow epilimnia.</li>
+                    <li><b>Rule of thumb:</b> Secchi depth <code>Z_SD &asymp; 1.7 / &kappa;</code>; Euphotic zone <code>Z_eu &asymp; 4.6 / &kappa;</code>.</li>
+                  </ul>
+                </div>
+              </details>
             </div>
           </div>
 
