@@ -630,9 +630,15 @@
                 <span class="control-label">Water Clarity (Light Extinction κ)</span>
               </div>
               <select id="select-clarity" class="speed-select" style="width: 100%;">
+                <option value="0.2">Ultra-Oligotrophic (Lake Superior, κ = 0.2 m⁻¹)</option>
+                <option value="0.3">Oligotrophic (Lake Stechlin, κ = 0.3 m⁻¹)</option>
                 <option value="0.5">High Clarity (Clear Lake, κ = 0.5 m⁻¹)</option>
-                <option value="1.0" selected>Moderate Clarity (Mesotrophic, κ = 1.0 m⁻¹)</option>
-                <option value="3.0">Turbid / Eutrophic (High Absorption, κ = 3.0 m⁻¹)</option>
+                <option value="0.7">Mesotrophic (Lake Müggelsee, κ = 0.7 m⁻¹)</option>
+                <option value="1.0" selected>Moderate Clarity (κ = 1.0 m⁻¹)</option>
+                <option value="1.2">Eutrophic (Lake Heiligensee, κ = 1.2 m⁻¹)</option>
+                <option value="1.5">Eutrophic Turbid (κ = 1.5 m⁻¹)</option>
+                <option value="1.8">Hypereutrophic (Lake Victoria, κ = 1.8 m⁻¹)</option>
+                <option value="3.0">Turbid / Humic (High Absorption, κ = 3.0 m⁻¹)</option>
               </select>
             </div>
           </div>

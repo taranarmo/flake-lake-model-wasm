@@ -49,6 +49,38 @@
 
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const DAYS_IN_MONTHS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+  function escapeHtml(str) {
+    if (str == null) return '';
+    return String(str).replace(/[&<>"']/g, c => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    }[c]));
+  }
+
+  function updateClarityUI(clarity) {
+    state.waterClarity = clarity;
+    if (!UI.selectClarity || clarity == null) return;
+    const valStr = clarity.toString();
+    let found = false;
+    for (let i = 0; i < UI.selectClarity.options.length; i++) {
+      if (Math.abs(parseFloat(UI.selectClarity.options[i].value) - clarity) < 0.01) {
+        UI.selectClarity.selectedIndex = i;
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      const opt = document.createElement('option');
+      opt.value = valStr;
+      opt.textContent = `Custom (κ = ${clarity.toFixed(2)} m⁻¹)`;
+      UI.selectClarity.appendChild(opt);
+      UI.selectClarity.value = valStr;
+    }
+  }
   const CURATED_BENCHMARKS = {
     heiligensee: {
       id: 'heiligensee',
@@ -1702,11 +1734,8 @@
       showCuratedStatus(`Running FLake WebAssembly simulation across ${dataset.steps.length} timesteps...`, "");
 
       // Sync lake parameters to sidebar
-      state.waterClarity = lake.clarity;
       updateLakeDepth(lake.depth);
-      if (UI.selectClarity) {
-        UI.selectClarity.value = lake.clarity.toString();
-      }
+      updateClarityUI(lake.clarity);
 
       // Initial conditions on Day 1 (January winter state)
       const firstAirT = dataset.steps[0].T_air;
@@ -1731,6 +1760,7 @@
       state.isDatasetMode = true;
       state.datasetSeries = dataset.steps;
       state.datasetResults = res.history;
+      state.datasetResultsMode = 'curated';
       state.datasetIndex = 0;
       state.history = res.history;
 
@@ -1742,8 +1772,8 @@
         if (h.Tsfc > maxTsfc) maxTsfc = h.Tsfc;
         if (h.hice > 0.001) iceSteps++;
       }
-      const isDaily = (dataset.timeStepSec || 86400) >= 43200;
-      const iceDays = isDaily ? iceSteps : Math.round(iceSteps / 24);
+      const stepSec = dataset.timeStepSec || 86400;
+      const iceDays = Math.round(iceSteps * (stepSec / 86400));
 
       if (UI.statTsfcMin) UI.statTsfcMin.textContent = `${minTsfc.toFixed(1)} °C`;
       if (UI.statTsfcMax) UI.statTsfcMax.textContent = `${maxTsfc.toFixed(1)} °C`;
@@ -2030,10 +2060,9 @@
         };
 
         // Sync lake parameters
-        state.waterClarity = lake.clarity;
         updateLakeDepth(lake.depth);
-        if (UI.selectClarity && lake.clarity != null) {
-          UI.selectClarity.value = lake.clarity.toString();
+        if (lake.clarity != null) {
+          updateClarityUI(lake.clarity);
         }
       }
 
@@ -2070,6 +2099,7 @@
       state.isDatasetMode = true;
       state.datasetSeries = dataset.steps;
       state.datasetResults = res.history;
+      state.datasetResultsMode = 'perpetual';
       state.datasetIndex = 0;
       state.history = res.history;
 
@@ -2159,7 +2189,7 @@
         else if (tok.includes('sol') || tok.includes('rad') || tok.includes('sw') || tok === 'i_atm') headerIndices.solar = i;
         else if (tok.includes('temp') || tok.includes('tair') || tok === 't' || tok === 't2m' || tok === 't_air') headerIndices.tair = i;
         else if (tok.includes('rh') || tok.includes('humid')) headerIndices.rh = i;
-        else if (tok.includes('vap') || tok.includes('ea') || tok.includes('e_a') || tok.includes('press')) headerIndices.vapor = i;
+        else if (tok.includes('vap') || tok === 'ea' || tok === 'e_a' || tok.startsWith('ea_') || tok.endsWith('_ea') || tok === 'vp' || tok.includes('vapor')) headerIndices.vapor = i;
         else if (tok.includes('wind') || tok.includes('wspd') || tok === 'u' || tok === 'u10' || tok === 'spd') headerIndices.wind = i;
         else if (tok.includes('cloud') || tok.includes('cl') || tok === 'n') headerIndices.cloud = i;
         else if (tok.includes('snow') || tok.includes('precip')) headerIndices.snow = i;
@@ -2184,14 +2214,38 @@
       let snowRate = 0;
 
       if (hasLetters && headerIndices.solar !== -1 && headerIndices.tair !== -1) {
-        if (headerIndices.step !== -1) stepVal = parseFloat(rawTokens[headerIndices.step]) || stepVal;
-        if (headerIndices.solar !== -1) solar = parseFloat(rawTokens[headerIndices.solar]) || 0;
-        if (headerIndices.tair !== -1) tair = parseFloat(rawTokens[headerIndices.tair]) || 0;
-        if (headerIndices.rh !== -1) rh_pct = parseFloat(rawTokens[headerIndices.rh]);
-        if (headerIndices.vapor !== -1) ea_hpa = parseFloat(rawTokens[headerIndices.vapor]);
-        if (headerIndices.wind !== -1) wind = parseFloat(rawTokens[headerIndices.wind]) || 2;
-        if (headerIndices.cloud !== -1) cloud = parseFloat(rawTokens[headerIndices.cloud]);
-        if (headerIndices.snow !== -1) snowRate = parseFloat(rawTokens[headerIndices.snow]) || 0;
+        if (headerIndices.step !== -1) {
+          const val = parseFloat(rawTokens[headerIndices.step]);
+          stepVal = isNaN(val) ? stepVal : val;
+        }
+        if (headerIndices.solar !== -1) {
+          const val = parseFloat(rawTokens[headerIndices.solar]);
+          solar = isNaN(val) ? 0 : val;
+        }
+        if (headerIndices.tair !== -1) {
+          const val = parseFloat(rawTokens[headerIndices.tair]);
+          tair = isNaN(val) ? 10.0 : val;
+        }
+        if (headerIndices.rh !== -1) {
+          const val = parseFloat(rawTokens[headerIndices.rh]);
+          rh_pct = isNaN(val) ? null : val;
+        }
+        if (headerIndices.vapor !== -1) {
+          const val = parseFloat(rawTokens[headerIndices.vapor]);
+          ea_hpa = isNaN(val) ? 10.0 : val;
+        }
+        if (headerIndices.wind !== -1) {
+          const val = parseFloat(rawTokens[headerIndices.wind]);
+          wind = isNaN(val) ? 2.5 : val;
+        }
+        if (headerIndices.cloud !== -1) {
+          const val = parseFloat(rawTokens[headerIndices.cloud]);
+          cloud = isNaN(val) ? 0.5 : val;
+        }
+        if (headerIndices.snow !== -1) {
+          const val = parseFloat(rawTokens[headerIndices.snow]);
+          snowRate = isNaN(val) ? 0 : val;
+        }
       } else {
         const nums = rawTokens.map(Number);
         if (nums.length >= 6) {
@@ -2283,15 +2337,41 @@
         const parsed = parseMeteorologicalText(text, file.name);
         state.customParsedData = parsed;
 
-        // Auto detect resolution
-        const isHourly = parsed.rowCount > 500;
-        const defaultDelTime = isHourly ? 3600 : 86400;
+        // Auto detect resolution based on solar diurnal variation, step deltas, or header hints
+        let isHourly = false;
+        let isThreeHourly = false;
+        const fnLower = file.name.toLowerCase();
+        if (fnLower.includes('hour') || fnLower.includes('1h')) {
+          isHourly = true;
+        } else if (fnLower.includes('3h') || fnLower.includes('3-hour')) {
+          isThreeHourly = true;
+        } else if (fnLower.includes('day') || fnLower.includes('daily')) {
+          isHourly = false;
+        } else {
+          // Check solar pattern: in hourly data, night steps have solar === 0
+          let zeroSolarCount = 0;
+          const checkLen = Math.min(parsed.steps.length, 72);
+          for (let sIdx = 0; sIdx < checkLen; sIdx++) {
+            if (parsed.steps[sIdx].solar === 0) zeroSolarCount++;
+          }
+          if (checkLen >= 24 && zeroSolarCount >= Math.floor(checkLen * 0.25)) {
+            isHourly = true;
+          } else {
+            isHourly = false;
+          }
+        }
+
+        const defaultDelTime = isHourly ? 3600 : (isThreeHourly ? 10800 : 86400);
         parsed.steps.forEach((s, idx) => {
           s.del_time = defaultDelTime;
           if (isHourly) {
             s.hourOfDay = idx % 24;
             s.dayOfYear = Math.floor(idx / 24) % 365 + 1;
-            s.timeStr = `Day ${s.dayOfYear}, ${s.hourOfDay}:00`;
+            s.timeStr = `Day ${s.dayOfYear}, ${String(s.hourOfDay).padStart(2, '0')}:00`;
+          } else if (isThreeHourly) {
+            s.hourOfDay = (idx * 3) % 24;
+            s.dayOfYear = Math.floor((idx * 3) / 24) % 365 + 1;
+            s.timeStr = `Day ${s.dayOfYear}, ${String(s.hourOfDay).padStart(2, '0')}:00`;
           } else {
             s.hourOfDay = 12;
             s.dayOfYear = (idx % 365) + 1;
@@ -2304,7 +2384,7 @@
         if (UI.customFileBadge) UI.customFileBadge.textContent = parsed.detectedFormat;
         if (UI.customRowsCount) UI.customRowsCount.textContent = parsed.rowCount.toLocaleString();
         if (UI.customFileSize) UI.customFileSize.textContent = `${(file.size / 1024).toFixed(1)} KB`;
-        if (UI.customStepDetected) UI.customStepDetected.textContent = isHourly ? 'Hourly (1h)' : 'Daily (24h)';
+        if (UI.customStepDetected) UI.customStepDetected.textContent = isHourly ? 'Hourly (1h)' : (isThreeHourly ? '3-Hourly (3h)' : 'Daily (24h)');
         if (UI.customTimestepSelect) UI.customTimestepSelect.value = defaultDelTime.toString();
         if (UI.customFileCard) UI.customFileCard.style.display = 'block';
         if (UI.btnRunCustom) UI.btnRunCustom.disabled = false;
@@ -2408,6 +2488,7 @@
       state.isDatasetMode = true;
       state.datasetSeries = parsed.steps;
       state.datasetResults = res.history;
+      state.datasetResultsMode = 'custom';
       state.datasetIndex = 0;
       state.history = res.history;
 
@@ -2419,8 +2500,8 @@
         if (h.Tsfc > maxTsfc) maxTsfc = h.Tsfc;
         if (h.hice > 0.001) iceSteps++;
       }
-      const isDaily = selectedDelTime >= 43200;
-      const iceDays = isDaily ? iceSteps : Math.round(iceSteps / 24);
+      const stepSec = selectedDelTime || 86400;
+      const iceDays = Math.round(iceSteps * (stepSec / 86400));
 
       if (UI.statTsfcMin) UI.statTsfcMin.textContent = `${minTsfc.toFixed(1)} °C`;
       if (UI.statTsfcMax) UI.statTsfcMax.textContent = `${maxTsfc.toFixed(1)} °C`;
@@ -2488,8 +2569,8 @@
     } else if (period === '2023') {
       url = `https://archive-api.open-meteo.com/v1/era5?latitude=${lat}&longitude=${lon}&start_date=2023-01-01&end_date=2023-12-31&hourly=temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,shortwave_radiation,cloud_cover,snowfall&wind_speed_unit=ms`;
     } else if (period === 'recent30') {
-      const endD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 2);
-      const startD = new Date(endD.getFullYear(), endD.getMonth(), endD.getDate() - 30);
+      const endD = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 2));
+      const startD = new Date(Date.UTC(endD.getUTCFullYear(), endD.getUTCMonth(), endD.getUTCDate() - 30));
       url = `https://archive-api.open-meteo.com/v1/era5?latitude=${lat}&longitude=${lon}&start_date=${fmt(startD)}&end_date=${fmt(endD)}&hourly=temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,shortwave_radiation,cloud_cover,snowfall&wind_speed_unit=ms`;
     } else if (period === 'forecast') {
       url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,shortwave_radiation,cloud_cover,snowfall&wind_speed_unit=ms&past_days=7&forecast_days=7`;
@@ -2592,8 +2673,8 @@
       startStr = '20230101';
       endStr = '20231231';
     } else if (period === 'recent30') {
-      const endD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 3);
-      const startD = new Date(endD.getFullYear(), endD.getMonth(), endD.getDate() - 30);
+      const endD = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 3));
+      const startD = new Date(Date.UTC(endD.getUTCFullYear(), endD.getUTCMonth(), endD.getUTCDate() - 30));
       startStr = fmt(startD);
       endStr = fmt(endD);
     } else {
@@ -2720,7 +2801,7 @@
       totalDays = Math.round((endD.getTime() - startD.getTime()) / (86400 * 1000)) + 1;
     } else if (period === 'recent30') {
       totalDays = 30;
-      startDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() - 30));
+      startDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 30));
     } else if (period === 'forecast') {
       totalDays = 14;
       startDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() - 7));
@@ -2915,6 +2996,7 @@
       state.isDatasetMode = true;
       state.datasetSeries = steps;
       state.datasetResults = res.history;
+      state.datasetResultsMode = 'api';
       state.datasetIndex = 0;
       state.history = res.history;
 
@@ -3024,8 +3106,11 @@
 
     const tAir = (forcing && forcing.T_air != null) ? forcing.T_air : (forcing && forcing.Tair != null ? forcing.Tair : state.baseAirTemp);
     const sol = (forcing && forcing.solar != null) ? forcing.solar : state.baseSolar;
+    const wnd = (forcing && forcing.wind != null) ? forcing.wind : state.baseWind;
+    state.currentForcingWind = wnd;
     if (UI.valAirTemp) UI.valAirTemp.textContent = `${tAir.toFixed(1)} °C`;
     if (UI.valSolar) UI.valSolar.textContent = `${Math.round(sol)} W/m²`;
+    if (UI.valWind && state.isDatasetMode) UI.valWind.textContent = `${wnd.toFixed(1)} m/s`;
   }
 
   function getDepthTickInterval(D) {
@@ -3125,7 +3210,7 @@
     }
     ctxLake.restore();
 
-    const windSpeed = state.baseWind;
+    const windSpeed = (state.isDatasetMode && state.currentForcingWind != null) ? state.currentForcingWind : state.baseWind;
     ctxLake.fillStyle = 'rgba(255, 255, 255, 0.65)';
     ctxLake.font = '11px ' + getComputedStyle(document.body).getPropertyValue('--font-mono');
     ctxLake.fillText(`Wind: ${windSpeed.toFixed(1)} m/s →`, waterLeft + 12, 18);
@@ -4042,7 +4127,7 @@
       state.baseAirTemp = -10.0;
       state.baseSolar = 30.0;
       state.baseWind = 3.5;
-      state.snowRate = 0.00002;
+      state.snowRate = 0.1 / 3600.0;
       engine.resetState('winter');
     } else if (presetKey === 'spring') {
       state.baseAirTemp = 13.0;
@@ -4420,10 +4505,12 @@
         if (UI.panelForcingApi) UI.panelForcingApi.style.display = 'none';
         if (UI.panelForcingCustom) UI.panelForcingCustom.style.display = 'none';
         updateForcingModeContext('curated');
-        if (state.datasetResults && state.datasetResults.length > 0) {
+        if (state.datasetResults && state.datasetResults.length > 0 && state.datasetResultsMode === 'curated') {
           state.isDatasetMode = true;
           if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'flex';
         } else {
+          state.isDatasetMode = false;
+          if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'none';
           state.isRunning = false;
           UI.btnPlay.textContent = 'Run';
           UI.clockDot.className = 'clock-dot paused';
@@ -4448,10 +4535,12 @@
         if (perpetualGeoPicker) {
           perpetualGeoPicker.invalidate();
         }
-        if (state.datasetResults && state.datasetResults.length > 0) {
+        if (state.datasetResults && state.datasetResults.length > 0 && state.datasetResultsMode === 'perpetual') {
           state.isDatasetMode = true;
           if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'flex';
         } else {
+          state.isDatasetMode = false;
+          if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'none';
           state.isRunning = false;
           UI.btnPlay.textContent = 'Run';
           UI.clockDot.className = 'clock-dot paused';
@@ -4476,10 +4565,12 @@
         if (geoPicker) {
           geoPicker.invalidate();
         }
-        if (state.datasetResults && state.datasetResults.length > 0) {
+        if (state.datasetResults && state.datasetResults.length > 0 && state.datasetResultsMode === 'api') {
           state.isDatasetMode = true;
           if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'flex';
         } else {
+          state.isDatasetMode = false;
+          if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'none';
           state.isRunning = false;
           UI.btnPlay.textContent = 'Run';
           UI.clockDot.className = 'clock-dot paused';
@@ -4501,10 +4592,12 @@
         if (UI.panelForcingPerpetual) UI.panelForcingPerpetual.style.display = 'none';
         if (UI.panelForcingApi) UI.panelForcingApi.style.display = 'none';
         updateForcingModeContext('custom');
-        if (state.datasetResults && state.datasetResults.length > 0) {
+        if (state.datasetResults && state.datasetResults.length > 0 && state.datasetResultsMode === 'custom') {
           state.isDatasetMode = true;
           if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'flex';
         } else {
+          state.isDatasetMode = false;
+          if (UI.apiPlaybackBox) UI.apiPlaybackBox.style.display = 'none';
           state.isRunning = false;
           UI.btnPlay.textContent = 'Run';
           UI.clockDot.className = 'clock-dot paused';
@@ -4638,12 +4731,17 @@
         const delTime = parseFloat(e.target.value);
         if (state.customParsedData && state.customParsedData.steps) {
           const isHourly = delTime === 3600;
+          const isThreeHourly = delTime === 10800;
           state.customParsedData.steps.forEach((s, idx) => {
             s.del_time = delTime;
             if (isHourly) {
               s.hourOfDay = idx % 24;
               s.dayOfYear = Math.floor(idx / 24) % 365 + 1;
-              s.timeStr = `Day ${s.dayOfYear}, ${s.hourOfDay}:00`;
+              s.timeStr = `Day ${s.dayOfYear}, ${String(s.hourOfDay).padStart(2, '0')}:00`;
+            } else if (isThreeHourly) {
+              s.hourOfDay = (idx * 3) % 24;
+              s.dayOfYear = Math.floor((idx * 3) / 24) % 365 + 1;
+              s.timeStr = `Day ${s.dayOfYear}, ${String(s.hourOfDay).padStart(2, '0')}:00`;
             } else {
               s.hourOfDay = 12;
               s.dayOfYear = (idx % 365) + 1;
@@ -4651,7 +4749,7 @@
             }
           });
           if (UI.customStepDetected) {
-            UI.customStepDetected.textContent = isHourly ? 'Hourly (1h)' : 'Daily (24h)';
+            UI.customStepDetected.textContent = isHourly ? 'Hourly (1h)' : (isThreeHourly ? '3-Hourly (3h)' : 'Daily (24h)');
           }
         }
       });
@@ -4665,8 +4763,7 @@
           const info = LAKE_PRESETS[pKey];
           UI.apiLat.value = info.lat;
           UI.apiLon.value = info.lon;
-          state.waterClarity = info.clarity;
-          if (UI.selectClarity) UI.selectClarity.value = info.clarity.toString();
+          updateClarityUI(info.clarity);
           engine.setLakeParameters({ extinWater: info.clarity });
           updateLakeDepth(info.depth);
           if (geoPicker) {
@@ -4880,7 +4977,7 @@
         UI.historyTooltip.style.top = `${top}px`;
 
         UI.historyTooltip.innerHTML = `
-          <div style="font-weight:600; color:#38bdf8; margin-bottom:3px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:2px;">${headerTime}</div>
+          <div style="font-weight:600; color:#38bdf8; margin-bottom:3px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:2px;">${escapeHtml(headerTime)}</div>
           <div>T_sfc: <b style="color:#f43f5e;">${h.Tsfc.toFixed(2)} °C</b></div>
           <div>T_wML: <b style="color:#fbbf24;">${h.TwML.toFixed(2)} °C</b></div>
           <div>T_bot: <b style="color:#38bdf8;">${h.Tbot.toFixed(2)} °C</b></div>
@@ -4935,8 +5032,7 @@
       // Initialize default API lake preset (Müggelsee)
       if (LAKE_PRESETS && LAKE_PRESETS['mueggelsee']) {
         const info = LAKE_PRESETS['mueggelsee'];
-        state.waterClarity = info.clarity;
-        if (UI.selectClarity) UI.selectClarity.value = info.clarity.toString();
+        updateClarityUI(info.clarity);
         engine.setLakeParameters({ extinWater: info.clarity });
         updateLakeDepth(info.depth);
       } else {
@@ -4990,8 +5086,7 @@
             if (UI.apiLakePreset) UI.apiLakePreset.value = key;
             if (UI.apiLat) UI.apiLat.value = lake.lat;
             if (UI.apiLon) UI.apiLon.value = lake.lon;
-            state.waterClarity = lake.clarity;
-            if (UI.selectClarity) UI.selectClarity.value = lake.clarity.toString();
+            updateClarityUI(lake.clarity);
             engine.setLakeParameters({ extinWater: lake.clarity });
             updateLakeDepth(lake.depth);
           }
