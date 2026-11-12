@@ -18,6 +18,7 @@ import os
 import re
 import json
 import shutil
+import struct
 import unicodedata
 import yaml
 import mistune
@@ -64,14 +65,14 @@ def ensure_favicon():
         shutil.copy2(root_favicon, site_favicon)
     else:
         # 16x16 32-bit BMP ICO generator
-        ico_header = bytes([0, 0, 1, 0, 1, 0, 16, 16, 0, 0, 1, 0, 32, 0, 40 + 16*16*4 + 16*2, 0, 0, 0, 22, 0, 0, 0])
-        bmp_header = (40).to_bytes(4, 'little') + (16).to_bytes(4, 'little') + (32).to_bytes(4, 'little') + \
-                     (1).to_bytes(2, 'little') + (32).to_bytes(2, 'little') + (0).to_bytes(4, 'little') + \
-                     (16*16*4).to_bytes(4, 'little') + (0).to_bytes(16, 'little')
-        pixel = bytes([0x5c, 0x48, 0x0a, 0xff]) # Lake navy #0a485c
+        bmp_size = 40 + 16 * 16 * 4 + 16 * 4
+        ico_dir = struct.pack("<HHH", 0, 1, 1)
+        ico_entry = struct.pack("<BBBBHHII", 16, 16, 0, 0, 1, 32, bmp_size, 22)
+        bmp_header = struct.pack("<IIIHHIIIIII", 40, 16, 32, 1, 32, 0, 16 * 16 * 4, 0, 0, 0, 0)
+        pixel = bytes([0x5c, 0x48, 0x0a, 0xff]) # Lake navy #0a485c in BGRA
         pixels = pixel * (16 * 16)
-        and_mask = bytes([0] * (16 * 2))
-        ico_data = ico_header + bmp_header + pixels + and_mask
+        and_mask = bytes([0] * (16 * 4)) # 16 rows * 4 bytes padded
+        ico_data = ico_dir + ico_entry + bmp_header + pixels + and_mask
         with open(site_favicon, "wb") as f:
             f.write(ico_data)
 
