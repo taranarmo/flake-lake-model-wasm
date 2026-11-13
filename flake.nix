@@ -83,8 +83,7 @@ EOF
                     || base == "_site"
                     || base == "dist"
                     || base == "build"
-                    || base == "flake-lake-model"
-                    || pkgs.lib.hasSuffix ".zip" base);
+                    || base == "flake-lake-model");
             };
 
             nativeBuildInputs = [
@@ -101,8 +100,9 @@ EOF
               cp ${flake-wasm}/flake.wasm ./model/flake.wasm
               cp ${flake-wasm}/wasm-base64.js ./model/wasm-base64.js
 
-              # Run test suite to verify WASM integrity
-              node test_flake_wasm.js
+              # Run test suite to verify WASM, app helpers, datasets, and static site build
+              node --test tests/*.test.js
+              python3 -m unittest discover -s tests -p "test_*.py" -v
 
               # Build static website into _site/
               python3 build_site.py

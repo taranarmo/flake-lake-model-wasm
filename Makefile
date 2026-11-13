@@ -15,7 +15,8 @@ site:
 	uv run build_site.py
 
 test:
-	node test_flake_wasm.js
+	node --test tests/*.test.js
+	uv run python -m unittest discover -s tests -p "test_*.py" -v
 
 clean:
 	rm -rf _site result src/*.mod src/*.o src/*.ll

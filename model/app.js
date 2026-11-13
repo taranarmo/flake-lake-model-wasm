@@ -5251,9 +5251,25 @@
     }
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', start);
-  } else {
-    start();
+  if (typeof globalThis !== 'undefined' && typeof globalThis.__FLAKE_TEST_HOOK__ === 'function') {
+    globalThis.__FLAKE_TEST_HOOK__({
+      escapeHtml,
+      getClarityInfo,
+      getSimulatedDateString,
+      getHydrologicalYearDates,
+      interpolateHarmonics,
+      generateHarmonicPerpetualSeries,
+      parseMeteorologicalText,
+      generateSynopticClimateSeries,
+      getDepthTickInterval
+    });
+  }
+
+  if (typeof document !== 'undefined' && !(typeof globalThis !== 'undefined' && typeof globalThis.__FLAKE_TEST_HOOK__ === 'function')) {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', start);
+    } else {
+      start();
+    }
   }
 })();
