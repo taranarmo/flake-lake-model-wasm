@@ -1,0 +1,20 @@
+name: Question / Usage Help
+description: Ask a question about running the web simulator, preparing forcing inputs, or interpreting results.
+title: "[Question]: "
+labels: ["question"]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Your Question
+      description: Ask clearly what you would like help understanding or accomplishing.
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context & Parameters Tried
+      description: Share the simulation mode, lake parameters, input format, or documentation pages you already checked.
+    validations:
+      required: false

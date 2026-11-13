@@ -1,0 +1,44 @@
+name: Feature Request
+description: Suggest a new capability, UI/UX improvement, dataset, or visualization.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      description: What area does this suggestion relate to?
+      options:
+        - Web Simulator UI / UX
+        - Visualization / Charts / Data Export
+        - Atmospheric Forcing / Climatology / Datasets
+        - Direct ODE Calculator
+        - Website Content / Bibliography / Users Directory
+        - Build / Developer Experience
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or Motivation
+      description: What limitation, workflow friction, or scientific use case does this address?
+      placeholder: I am trying to...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution
+      description: Describe the desired feature, controls, or output format in as much detail as possible.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered & References
+      description: Any workarounds, alternative designs, or scientific/reference links.
+    validations:
+      required: false

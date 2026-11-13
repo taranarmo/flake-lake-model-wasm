@@ -1,0 +1,33 @@
+name: Documentation & Site Content
+description: Report typos, broken links, missing publications/users, or unclear guidance on the website.
+title: "[Docs]: "
+labels: ["documentation"]
+body:
+  - type: input
+    id: location
+    attributes:
+      label: Page URL or Content File
+      description: Link to the page or name the source file (e.g., content/hints.md, site_data/users.json, papers.html).
+      placeholder: "e.g., https://taranarmo.github.io/flake-lake-model-wasm/docs.html"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: doc_type
+    attributes:
+      label: Type of Content Issue
+      options:
+        - Outdated or inaccurate technical explanation
+        - Broken link or missing download/asset
+        - Add or update entry (Publications, Users Directory, Datasets)
+        - Typo, formatting, or accessibility issue
+    validations:
+      required: true
+
+  - type: textarea
+    id: details
+    attributes:
+      label: Details & Suggested Correction
+      description: Describe what needs to be added, fixed, or clarified.
+    validations:
+      required: true

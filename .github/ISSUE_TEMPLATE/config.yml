@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Core Fortran Model, CLI, or Docker Issue
+    url: https://github.com/taranarmo/flake-lake-model/issues/new/choose
+    about: Report bugs or request features in the FLake Fortran 90 physics core, CLI driver, or OCI/Docker container.
+  - name: FLake Discussion Forum & Mailing List
+    url: https://taranarmo.github.io/flake-lake-model-wasm/forum.html
+    about: Community forum and mailing list for scientific modeling discussions.

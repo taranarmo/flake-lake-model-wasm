@@ -1,0 +1,98 @@
+name: Bug Report
+description: Report a bug in the web simulator, WebAssembly engine, forcing modes, or static site.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug in the FLake WebAssembly app and portal.
+        If the issue is strictly in the Fortran 90 core physics, CLI driver, or Docker image, please file it in [`taranarmo/flake-lake-model`](https://github.com/taranarmo/flake-lake-model/issues/new/choose).
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected Area
+      description: Which part of the web application or site is affected?
+      options:
+        - Interactive Simulation UI (Visualizer, Charts, Controls)
+        - Atmospheric Forcing Mode (Weather API, Perpetual Year, Curated, Custom Upload, Manual)
+        - Global Map / Planetary Harmonic Climatology
+        - Direct Model Calculator (Single Step ODE)
+        - WebAssembly Engine / Numerical Output (flake-engine.js, flake.wasm)
+        - Static Website Content / Navigation / Search
+        - Local Build / Nix / GitHub Pages Deployment
+    validations:
+      required: true
+
+  - type: dropdown
+    id: forcing_mode
+    attributes:
+      label: Forcing Mode (if applicable)
+      description: Which forcing mode was active when the issue occurred?
+      options:
+        - Not applicable
+        - Weather API (Open-Meteo / ERA5)
+        - Perpetual Year Equilibrium (Global Map or Reference Lake)
+        - Curated Benchmark Dataset (Heiligensee, Mueggelsee, Stechlinsee)
+        - Custom File Upload (.dat / .csv / .tsv)
+        - Manual Sliders / Synthetic Weather
+        - Direct Calculator (Single Step ODE)
+    validations:
+      required: false
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the Bug
+      description: A clear and concise description of what went wrong.
+      placeholder: Tell us what happened...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Please provide exact steps to reproduce, including lake depth, fetch, transparency/extinction, coordinates, or sample input if relevant.
+      value: |
+        1. Open ...
+        2. Select forcing mode / preset ...
+        3. Adjust parameters ...
+        4. Observe error ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs. Actual Behavior
+      description: What did you expect to happen, and what happened instead?
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Browser, OS, and URL
+      description: Include browser name/version, operating system, device type (desktop/mobile), and whether you used the live GitHub Pages site or a local server/file.
+      placeholder: "e.g., Firefox 131 on Ubuntu 24.04 (Desktop) at https://taranarmo.github.io/flake-lake-model-wasm/model/"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console Errors, Screenshots, or Exported JSON
+      description: Open browser DevTools Console (F12) and paste any errors, or attach screenshots / exported simulation JSON.
+      render: text
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      options:
+        - label: I searched existing open issues to make sure this is not a duplicate.
+          required: true
