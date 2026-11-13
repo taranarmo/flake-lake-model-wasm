@@ -10,7 +10,7 @@ Core Fortran Model: **[https://github.com/taranarmo/flake-lake-model](https://gi
 
 ## Overview
 
-[FLake](https://taranarmo.github.io/flake-lake-model/) is a bulk two-layer lake model based on the concept of **self-similarity** of the temperature-depth curve. It was developed by Dr. Dmitrii Mironov and collaborators at the German Weather Service (Deutscher Wetterdienst, DWD) and the Leibniz Institute of Freshwater Ecology and Inland Fisheries (IGB Berlin), and is used operationally in numerical weather prediction (ICON, COSMO, ECMWF IFS) and climate modeling worldwide.
+[FLake](https://github.com/taranarmo/flake-lake-model) is a bulk two-layer lake model based on the concept of **self-similarity** of the temperature-depth curve. It was developed by Dr. Dmitrii Mironov and collaborators at the German Weather Service (Deutscher Wetterdienst, DWD) and the Leibniz Institute of Freshwater Ecology and Inland Fisheries (IGB Berlin), and is used operationally in numerical weather prediction (ICON, COSMO, ECMWF IFS) and climate modeling worldwide.
 
 ### Key Highlights of the Modernized Site:
 - **Zero-Backend Architecture**: The original CGI-based model runner (`_model?LAT=...`) has been replaced with a 100% client-side WebAssembly simulation compiled via **LFortran 0.68.0**. No server backend, database, or CGI scripts required.
